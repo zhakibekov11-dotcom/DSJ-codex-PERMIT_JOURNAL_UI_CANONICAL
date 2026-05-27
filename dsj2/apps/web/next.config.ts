@@ -7,6 +7,8 @@ import type { NextConfig } from "next";
 const require = createRequire(import.meta.url);
 const webAppRoot = path.dirname(fileURLToPath(import.meta.url));
 const locatorProjectRoot = path.resolve(webAppRoot, "..", "..");
+const outputFileTracingRoot =
+  process.env.VERCEL === "1" ? path.resolve(locatorProjectRoot, "..") : locatorProjectRoot;
 const locatorRuntimeStubPath = path.join(webAppRoot, "lib", "locator-runtime-stub.ts");
 const locatorWebpackLoaderPath = path.join(webAppRoot, "lib", "locator-webpack-loader.cjs");
 const locatorSolidJsWebDevPath = path.resolve(
@@ -35,7 +37,7 @@ const enableLocator = process.env.NEXT_PUBLIC_ENABLE_LOCATOR === "1";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@dsj/ui", "@dsj/utils", "@dsj/types"],
-  outputFileTracingRoot: locatorProjectRoot,
+  outputFileTracingRoot,
   experimental: {
     devtoolSegmentExplorer: false,
   },

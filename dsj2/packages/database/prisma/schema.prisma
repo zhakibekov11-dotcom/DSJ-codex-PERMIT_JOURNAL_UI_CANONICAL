@@ -1,0 +1,2323 @@
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  COMPANY_ADMIN
+  SAFETY_ENGINEER
+  EMPLOYEE_SIGNER
+}
+
+enum EmployeeStatus {
+  active
+  inactive
+}
+
+enum EmployeeKind {
+  INTERNAL
+  CONTRACTOR
+}
+
+enum BriefingType {
+  INTRODUCTORY
+  PRIMARY
+  REPEATED
+  UNSCHEDULED
+  TARGETED
+}
+
+enum BriefingJournalKind {
+  INTRODUCTORY
+  WORKPLACE
+}
+
+enum BriefingStatus {
+  DRAFT
+  READY_FOR_SIGNING
+  SIGNED
+  ARCHIVED
+}
+
+enum EmployeeInstructionStatus {
+  ASSIGNED
+  OPENED
+  ACKNOWLEDGED
+  SIGNED
+  OVERDUE
+}
+
+enum SignatureProvider {
+  MOCK_NCALAYER
+  NCALAYER
+  MOCK_PROVIDER
+  NCALAYER_PROVIDER
+  EGOV_MOBILE_QR_PROVIDER
+  SMART_BRIDGE_PROVIDER
+  DIGITAL_ID_PROVIDER
+}
+
+enum SignatureStatus {
+  PREPARED
+  SIGNED
+  VERIFIED
+  FAILED
+  REVOKED
+}
+
+enum SigningSessionStatus {
+  CREATED
+  QR_GENERATED
+  WAITING_FOR_USER
+  CALLBACK_RECEIVED
+  SIGNATURE_RECEIVED
+  VERIFYING
+  COMPLETED
+  EXPIRED
+  FAILED
+  CANCELLED
+}
+
+enum SigningDocumentType {
+  BRIEFING_RECORD
+  BRIEFING_JOURNAL_ENTRY
+  EMPLOYEE_DOCUMENT
+  PROTOCOL
+  RESPONSIBILITY_ORDER
+  WORK_PERMIT
+}
+
+enum SigningCallbackValidationStatus {
+  RECEIVED
+  AUTHENTICATED
+  REJECTED
+}
+
+enum SigningCallbackProcessingStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+enum SignatureEvidenceVerificationStatus {
+  PENDING
+  PASS
+  FAIL
+  INDETERMINATE
+}
+
+enum ReminderType {
+  REPEATED_BRIEFING_DUE
+  REPEATED_BRIEFING_OVERDUE
+  UNSIGNED_RECORD_PENDING
+  SIGNING_LINK_INVITE
+}
+
+enum ReminderStatus {
+  pending
+  sent
+  resolved
+  failed
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+}
+
+enum NotificationJobStatus {
+  queued
+  processing
+  sent
+  failed
+  skipped
+}
+
+enum DocumentType {
+  CERTIFICATE
+  PROTOCOL
+  STATEMENT
+  COMPLETION_CONFIRMATION
+  SAFETY_CERTIFICATE
+}
+
+enum DocumentStatus {
+  DRAFT
+  ACTIVE
+  EXPIRING
+  EXPIRED
+}
+
+enum CompanyDocumentCategory {
+  LOCAL_ACT
+  ORDER
+  INSTRUCTION
+  JOURNAL
+  TRAINING_CERTIFICATION
+}
+
+enum CompanyDocumentStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum SafetyCertificateStatus {
+  ACTIVE
+  EXPIRING_SOON
+  EXPIRED
+}
+
+enum TrainingAssignmentStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+enum ExamAttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+}
+
+enum CardRequestMode {
+  EMPLOYEE
+  REQUEST
+}
+
+enum CardRequestType {
+  BIOT
+  PTM
+  PB
+  PS
+}
+
+enum BiotDocumentKind {
+  WORKER_CARD
+  ITR_CERTIFICATE
+}
+
+enum CorrespondenceKind {
+  LETTER
+  COMMERCIAL_PROPOSAL
+}
+
+enum CorrespondenceStatus {
+  DRAFT
+  READY_TO_SEND
+  PARTIALLY_SENT
+  SENT
+  ARCHIVED
+}
+
+enum CorrespondenceRecipientStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model Company {
+  id               String            @id @default(cuid())
+  name             String
+  bin              String?           @unique
+  industry         String?
+  timezone         String            @default("Asia/Almaty")
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  users            User[]
+  departments      Department[]
+  sites            Site[]
+  contractorCompanies ContractorCompany[]
+  employees        Employee[]
+  briefingBatches  BriefingBatch[]
+  briefingRecords  BriefingRecord[]
+  employeeDocuments EmployeeDocument[]
+  companyDocuments CompanyDocument[]
+  safetyCertificates SafetyCertificate[]
+  trainingPrograms  TrainingProgram[]
+  trainingAssignments TrainingAssignment[]
+  exams            Exam[]
+  examAttempts     ExamAttempt[]
+  signatures       Signature[]
+  reminders        Reminder[]
+  notificationJobs NotificationJob[]
+  auditLogs        AuditLog[]
+  cardRequests     CardGenerationRequest[]
+  correspondences  Correspondence[]
+}
+
+model User {
+  id                 String           @id @default(cuid())
+  companyId          String?
+  departmentId       String?
+  siteId             String?
+  email              String           @unique
+  passwordHash       String
+  fullName           String
+  role               UserRole
+  isActive           Boolean          @default(true)
+  lastLoginAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  company            Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  department         Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  site               Site?            @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  employee           Employee?
+  instructedBriefing BriefingRecord[] @relation("InstructorBriefings")
+  assignedTrainingAssignments TrainingAssignment[] @relation("TrainingAssigner")
+  signatures         Signature[]      @relation("UserSignatures")
+  signingSessions    SigningSession[] @relation("SigningSessionSignerUser")
+  verifiedEmployeeDocuments EmployeeDocument[] @relation("EmployeeDocumentVerifier")
+  auditLogs          AuditLog[]       @relation("ActorAuditLogs")
+  notificationJobs   NotificationJob[] @relation("NotificationAssignee")
+  createdCardRequests CardGenerationRequest[] @relation("CardRequestsCreated")
+  createdCorrespondences Correspondence[] @relation("CorrespondenceCreatedBy")
+  createdCompanyDocuments CompanyDocument[] @relation("CompanyDocumentsCreatedBy")
+
+  @@index([companyId, role])
+}
+
+model Department {
+  id              String           @id @default(cuid())
+  companyId       String
+  name            String
+  code            String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  users           User[]
+  employees       Employee[]
+  briefingRecords BriefingRecord[]
+  protocols       Protocol[]
+  responsibilityOrders ResponsibilityOrder[]
+  responsibilityAppointments ResponsibilityAppointment[]
+
+  @@unique([companyId, name])
+}
+
+model Site {
+  id              String           @id @default(cuid())
+  companyId       String
+  name            String
+  location        String?
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  users           User[]
+  employees       Employee[]
+  briefingRecords BriefingRecord[]
+
+  @@unique([companyId, name])
+}
+
+model Employee {
+  id              String           @id @default(cuid())
+  companyId       String
+  departmentId    String?
+  siteId          String?
+  positionId      String?
+  userId          String?          @unique
+  contractorCompanyId String?
+  fullName        String
+  iinEncrypted    String
+  iinHash         String
+  iinLast4        String
+  employeeNumber  String
+  jobTitle        String
+  jobTitleKz      String?
+  photoDataUrl    String?          @db.Text
+  photoFileName   String?
+  email           String?
+  phone           String?
+  employeeKind    EmployeeKind     @default(INTERNAL)
+  status          EmployeeStatus   @default(active)
+  isArchived      Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  department      Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  site            Site?            @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  position        Position?        @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  user            User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  contractorCompany ContractorCompany? @relation(fields: [contractorCompanyId], references: [id], onDelete: SetNull)
+  briefingRecords BriefingRecord[]
+  documents       EmployeeDocument[]
+  safetyCertificates SafetyCertificate[]
+  trainingAssignments TrainingAssignment[]
+  examAttempts    ExamAttempt[]
+  protocolLinks   ProtocolEmployee[]
+  responsibilityAppointments ResponsibilityAppointment[]
+  signatures      Signature[]      @relation("EmployeeSignatures")
+  signingSessions SigningSession[] @relation("SigningSessionSignerEmployee")
+  reminders       Reminder[]
+  cardRequestItems CardGenerationRequestItem[]
+
+  @@unique([companyId, iinHash])
+  @@unique([companyId, employeeNumber])
+  @@index([companyId, fullName])
+  @@index([companyId, status])
+}
+
+model ContractorCompany {
+  id            String     @id @default(cuid())
+  companyId     String
+  name          String
+  bin           String?
+  contactEmail  String?
+  contactPhone  String?
+  notes         String?
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  company       Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees     Employee[]
+
+  @@unique([companyId, name])
+  @@index([companyId, isActive])
+}
+
+model BriefingBatch {
+  id              String           @id @default(cuid())
+  companyId       String
+  batchNumber     String
+  participantCount Int             @default(0)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  records         BriefingRecord[]
+
+  @@unique([companyId, batchNumber])
+  @@index([companyId, createdAt])
+}
+
+model BriefingRecord {
+  id               String          @id @default(cuid())
+  companyId        String
+  briefingBatchId  String?
+  departmentId     String?
+  siteId           String?
+  employeeId       String
+  instructorUserId String
+  briefingType     BriefingType
+  briefingDate     DateTime
+  completionDueAt  DateTime?
+  nextBriefingDueAt DateTime?
+  topic            String
+  notes            String?
+  materialContent  String?
+  materialFileName String?
+  materialFileUrl  String?
+  status           BriefingStatus  @default(DRAFT)
+  employeeStatus   EmployeeInstructionStatus @default(ASSIGNED)
+  openedAt         DateTime?
+  acknowledgedAt   DateTime?
+  documentNumber   String?
+  documentHash     String?
+  inviteToken      String?         @unique
+  inviteTokenExpiresAt DateTime?
+  inviteSentAt     DateTime?
+  registrationCompletedAt DateTime?
+  signedAt         DateTime?
+  archivedAt       DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  company          Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  briefingBatch    BriefingBatch?  @relation(fields: [briefingBatchId], references: [id], onDelete: SetNull)
+  department       Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  site             Site?           @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  employee         Employee        @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  instructor       User            @relation("InstructorBriefings", fields: [instructorUserId], references: [id], onDelete: Restrict)
+  signatures       Signature[]
+  reminders        Reminder[]
+  notificationJobs NotificationJob[]
+  auditLogs        AuditLog[]      @relation("BriefingAuditLogs")
+
+  @@unique([companyId, documentNumber])
+  @@index([companyId, status, briefingDate])
+  @@index([companyId, employeeStatus, completionDueAt])
+  @@index([companyId, briefingType, briefingDate])
+  @@index([employeeId, briefingDate])
+}
+
+model EmployeeDocument {
+  id                 String         @id @default(cuid())
+  companyId          String
+  employeeId         String
+  trainingAssignmentId String?
+  documentTypeDefinitionId String?
+  documentEnvelopeId String?       @unique
+  title              String
+  documentNumber     String?
+  documentType       DocumentType
+  issueDate          DateTime
+  expiryDate         DateTime?
+  issuerName         String
+  status             DocumentStatus @default(DRAFT)
+  verificationStatus EmployeeDocumentVerificationStatus @default(PENDING)
+  verifiedAt         DateTime?
+  verifiedByUserId   String?
+  verificationNotes  String?
+  fileName           String?
+  fileUrl            String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  company            Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee           Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  trainingAssignment TrainingAssignment? @relation(fields: [trainingAssignmentId], references: [id], onDelete: SetNull)
+  documentTypeDefinition ComplianceDocumentType? @relation(fields: [documentTypeDefinitionId], references: [id], onDelete: SetNull)
+  documentEnvelope   DocumentEnvelope? @relation(fields: [documentEnvelopeId], references: [id], onDelete: SetNull)
+  verifiedByUser     User?          @relation("EmployeeDocumentVerifier", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+  safetyCertificate  SafetyCertificate?
+
+  @@index([companyId, employeeId, issueDate])
+  @@index([companyId, status, expiryDate])
+  @@index([companyId, documentTypeDefinitionId])
+  @@index([companyId, verificationStatus, expiryDate])
+}
+
+model CompanyDocument {
+  id              String                 @id @default(cuid())
+  companyId       String
+  createdByUserId String
+  category        CompanyDocumentCategory
+  documentName    String
+  title           String
+  summary         String?
+  body            String                 @db.Text
+  issueDate       DateTime?
+  status          CompanyDocumentStatus  @default(DRAFT)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  company         Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdByUser   User                   @relation("CompanyDocumentsCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, category, updatedAt])
+  @@index([companyId, status, updatedAt])
+}
+
+model SafetyCertificate {
+  id                 String                  @id @default(cuid())
+  companyId          String
+  employeeId         String
+  trainingAssignmentId String?
+  documentId         String?                 @unique
+  certificateNumber  String
+  issueDate          DateTime
+  expiryDate         DateTime
+  issuerName         String
+  status             SafetyCertificateStatus @default(ACTIVE)
+  fileName           String?
+  fileUrl            String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  company            Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee           Employee                @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  trainingAssignment TrainingAssignment?     @relation(fields: [trainingAssignmentId], references: [id], onDelete: SetNull)
+  document           EmployeeDocument?       @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, certificateNumber])
+  @@index([companyId, employeeId, expiryDate])
+  @@index([companyId, status, expiryDate])
+}
+
+model TrainingProgram {
+  id                     String              @id @default(cuid())
+  companyId              String
+  title                  String
+  description            String
+  materialContent        String?
+  materialFileName       String?
+  materialFileUrl        String?
+  videoUrl               String?
+  issuerName             String?
+  requiresExam           Boolean             @default(false)
+  createsDocument        Boolean             @default(false)
+  createsSafetyCertificate Boolean           @default(false)
+  isActive               Boolean             @default(true)
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  company                Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignments            TrainingAssignment[]
+  exam                   Exam?
+
+  @@unique([companyId, title])
+  @@index([companyId, isActive])
+}
+
+model TrainingAssignment {
+  id                 String                   @id @default(cuid())
+  companyId          String
+  employeeId         String
+  trainingProgramId  String
+  assignedByUserId   String?
+  dueAt              DateTime?
+  status             TrainingAssignmentStatus @default(ASSIGNED)
+  progressPercent    Int                      @default(0)
+  startedAt          DateTime?
+  completedAt        DateTime?
+  examPassedAt       DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  company            Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee           Employee                 @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  trainingProgram    TrainingProgram          @relation(fields: [trainingProgramId], references: [id], onDelete: Cascade)
+  assignedByUser     User?                    @relation("TrainingAssigner", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  generatedDocuments EmployeeDocument[]
+  generatedCertificates SafetyCertificate[]
+  examAttempts       ExamAttempt[]
+  cardRequestItems   CardGenerationRequestItem[]
+
+  @@unique([employeeId, trainingProgramId])
+  @@index([companyId, status, dueAt])
+}
+
+model Exam {
+  id                String          @id @default(cuid())
+  companyId         String
+  trainingProgramId String          @unique
+  title             String
+  description       String?
+  passingScore      Int
+  maxAttempts       Int             @default(3)
+  isActive          Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  trainingProgram   TrainingProgram @relation(fields: [trainingProgramId], references: [id], onDelete: Cascade)
+  questions         ExamQuestion[]
+  attempts          ExamAttempt[]
+
+  @@index([companyId, isActive])
+}
+
+model ExamQuestion {
+  id         String       @id @default(cuid())
+  examId      String
+  prompt      String
+  sortOrder   Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  exam        Exam        @relation(fields: [examId], references: [id], onDelete: Cascade)
+  options     ExamOption[]
+
+  @@index([examId, sortOrder])
+}
+
+model ExamOption {
+  id         String       @id @default(cuid())
+  questionId String
+  text       String
+  isCorrect  Boolean      @default(false)
+  sortOrder  Int          @default(0)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  question   ExamQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId, sortOrder])
+}
+
+model ExamAttempt {
+  id                 String            @id @default(cuid())
+  companyId          String
+  examId             String
+  trainingAssignmentId String
+  employeeId         String
+  status             ExamAttemptStatus @default(IN_PROGRESS)
+  score              Int?
+  passed             Boolean?
+  startedAt          DateTime          @default(now())
+  submittedAt        DateTime?
+  answers            Json?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  company            Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  exam               Exam              @relation(fields: [examId], references: [id], onDelete: Cascade)
+  trainingAssignment TrainingAssignment @relation(fields: [trainingAssignmentId], references: [id], onDelete: Cascade)
+  employee           Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, employeeId, startedAt])
+  @@index([trainingAssignmentId, createdAt])
+}
+
+model CardGenerationRequest {
+  id               String             @id @default(cuid())
+  companyId        String
+  createdByUserId  String
+  title            String
+  certificateType  CardRequestType
+  biotDocumentKind BiotDocumentKind   @default(WORKER_CARD)
+  includeCard      Boolean            @default(true)
+  includeProtocol  Boolean            @default(true)
+  includeWitness   Boolean            @default(false)
+  requestMode      CardRequestMode
+  issueDate        DateTime
+  seriesNumber     String
+  trainingSubject  String
+  requestCompanyRu String?
+  requestCompanyKz String?
+  itemsCount       Int                @default(0)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  company          Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdByUser    User               @relation("CardRequestsCreated", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  items            CardGenerationRequestItem[]
+
+  @@index([companyId, createdAt])
+  @@index([companyId, certificateType, issueDate])
+}
+
+model CardGenerationRequestItem {
+  id                 String                @id @default(cuid())
+  requestId          String
+  employeeId         String?
+  trainingAssignmentId String?
+  fullName           String
+  fullNameKz         String?
+  issuedTo           String?
+  positionRu         String?
+  positionKz         String?
+  workplaceRu        String?
+  workplaceKz        String?
+  photoDataUrl       String?               @db.Text
+  photoFileName      String?
+  certificateNumber  String
+  protocolNumber     String
+  witnessCertificateNumber String?
+  witnessRegistrationNumber String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  request            CardGenerationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  employee           Employee?             @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  trainingAssignment TrainingAssignment?   @relation(fields: [trainingAssignmentId], references: [id], onDelete: SetNull)
+
+  @@index([requestId, createdAt])
+  @@index([employeeId])
+  @@index([trainingAssignmentId])
+}
+
+model Correspondence {
+  id              String                @id @default(cuid())
+  companyId       String
+  createdByUserId String
+  registryNumber  String
+  title           String
+  kind            CorrespondenceKind
+  subject         String
+  body            String                @db.Text
+  status          CorrespondenceStatus  @default(DRAFT)
+  sentAt          DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  company         Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdByUser   User                  @relation("CorrespondenceCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  recipients      CorrespondenceRecipient[]
+
+  @@unique([companyId, registryNumber])
+  @@index([companyId, kind, createdAt])
+  @@index([companyId, status, updatedAt])
+}
+
+model CorrespondenceRecipient {
+  id              String                        @id @default(cuid())
+  correspondenceId String
+  companyName     String
+  contactName     String
+  contactEmail    String?
+  contactPosition String?
+  status          CorrespondenceRecipientStatus @default(PENDING)
+  sentAt          DateTime?
+  lastError       String?
+  createdAt       DateTime                      @default(now())
+  updatedAt       DateTime                      @updatedAt
+  correspondence  Correspondence                @relation(fields: [correspondenceId], references: [id], onDelete: Cascade)
+
+  @@index([correspondenceId, createdAt])
+  @@index([status, sentAt])
+}
+
+model Signature {
+  id               String            @id @default(cuid())
+  companyId        String?
+  organizationId   String?
+  briefingRecordId String?
+  briefingJournalEntryId String?
+  documentEnvelopeId String?
+  documentVersionId String?
+  signerUserId     String?
+  signerEmployeeId String?
+  signerRole       String?
+  provider         SignatureProvider
+  status           SignatureStatus   @default(PREPARED)
+  signerName       String
+  signerIinMasked  String
+  certificateSerial String
+  certificateMetadataId String?
+  documentHash     String
+  signatureHash    String?
+  signedAt         DateTime?
+  verifiedAt       DateTime?
+  ipAddress        String?
+  userAgent        String?
+  signingSessionId String?
+  payload          Json?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  company          Company?          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization     Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  briefingRecord   BriefingRecord?   @relation(fields: [briefingRecordId], references: [id], onDelete: Cascade)
+  briefingJournalEntry BriefingJournalEntry? @relation(fields: [briefingJournalEntryId], references: [id], onDelete: SetNull)
+  documentEnvelope DocumentEnvelope? @relation("EnvelopeSignatures", fields: [documentEnvelopeId], references: [id], onDelete: SetNull)
+  documentVersion  DocumentVersion?   @relation("VersionSignatures", fields: [documentVersionId], references: [id], onDelete: SetNull)
+  certificateMetadata CertificateMetadata? @relation(fields: [certificateMetadataId], references: [id], onDelete: SetNull)
+  signerUser       User?             @relation("UserSignatures", fields: [signerUserId], references: [id], onDelete: SetNull)
+  signerEmployee   Employee?         @relation("EmployeeSignatures", fields: [signerEmployeeId], references: [id], onDelete: SetNull)
+  signingSession   SigningSession?   @relation(fields: [signingSessionId], references: [id], onDelete: SetNull)
+  verification     SignatureVerification?
+  evidence         SignatureEvidence[]
+
+  @@index([companyId, briefingRecordId])
+  @@index([organizationId, documentEnvelopeId])
+  @@index([signingSessionId])
+}
+
+model SigningSession {
+  id                String               @id @default(cuid())
+  organizationId    String
+  documentType      SigningDocumentType
+  documentId        String
+  documentEnvelopeId String?
+  documentVersionId String?
+  signerUserId      String?
+  signerEmployeeId  String?
+  signerIinMasked   String?
+  signerIinHash     String?
+  provider          SignatureProvider
+  status            SigningSessionStatus @default(CREATED)
+  providerSessionId String?
+  documentHash      String
+  hashAlgorithm     String               @default("SHA-256")
+  idempotencyKey    String?
+  providerPublicJson Json?
+  expiresAt         DateTime
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  failureReason     String?
+  correlationId     String
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documentEnvelope  DocumentEnvelope?    @relation(fields: [documentEnvelopeId], references: [id], onDelete: SetNull)
+  documentVersion   DocumentVersion?     @relation(fields: [documentVersionId], references: [id], onDelete: SetNull)
+  signerUser        User?                @relation("SigningSessionSignerUser", fields: [signerUserId], references: [id], onDelete: SetNull)
+  signerEmployee    Employee?            @relation("SigningSessionSignerEmployee", fields: [signerEmployeeId], references: [id], onDelete: SetNull)
+  signatures        Signature[]
+  evidence          SignatureEvidence[]
+  callbackEvents    ProviderCallbackEvent[]
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, documentType, documentId])
+  @@index([provider, providerSessionId])
+  @@index([status, expiresAt])
+  @@index([correlationId])
+}
+
+model SigningProviderConfig {
+  id              String            @id @default(cuid())
+  organizationId  String
+  provider        SignatureProvider
+  enabled         Boolean           @default(false)
+  environment     String            @default("local")
+  publicConfigJson Json?
+  secretRef       String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider])
+  @@index([provider, enabled])
+}
+
+model SignatureEvidence {
+  id                String                              @id @default(cuid())
+  organizationId    String
+  signingSessionId  String
+  signatureId       String?
+  documentType      SigningDocumentType
+  documentId        String
+  documentEnvelopeId String?
+  documentVersionId String?
+  provider          SignatureProvider
+  documentHash      String
+  hashAlgorithm     String                              @default("SHA-256")
+  signatureFormat   String
+  signaturePayloadLocation String?
+  signaturePayloadHash String?
+  certificateSubject String?
+  certificateIssuer String?
+  certificateSerial String?
+  signedAt          DateTime?
+  verifiedAt        DateTime?
+  verificationStatus SignatureEvidenceVerificationStatus @default(PENDING)
+  redactedProviderResponse Json?
+  storageKey        String?
+  correlationId     String
+  supersedesEvidenceId String?
+  immutableCreatedAt DateTime                          @default(now())
+  createdAt         DateTime                            @default(now())
+  updatedAt         DateTime                            @updatedAt
+  organization      Organization                        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  signingSession    SigningSession                      @relation(fields: [signingSessionId], references: [id], onDelete: Cascade)
+  signature         Signature?                          @relation(fields: [signatureId], references: [id], onDelete: SetNull)
+  documentEnvelope  DocumentEnvelope?                   @relation(fields: [documentEnvelopeId], references: [id], onDelete: SetNull)
+  documentVersion   DocumentVersion?                    @relation(fields: [documentVersionId], references: [id], onDelete: SetNull)
+  supersedesEvidence SignatureEvidence?                 @relation("EvidenceSupersession", fields: [supersedesEvidenceId], references: [id], onDelete: SetNull)
+  supersededBy      SignatureEvidence[]                 @relation("EvidenceSupersession")
+
+  @@index([signingSessionId])
+  @@index([signatureId])
+  @@index([organizationId, documentType, documentId])
+  @@index([correlationId])
+}
+
+model ProviderCallbackEvent {
+  id                String                          @id @default(cuid())
+  organizationId    String?
+  signingSessionId  String?
+  provider          SignatureProvider
+  providerSessionId String?
+  validationStatus  SigningCallbackValidationStatus @default(RECEIVED)
+  processingStatus  SigningCallbackProcessingStatus @default(PENDING)
+  redactedPayloadJson Json?
+  rawPayloadStorageKey String?
+  error             String?
+  correlationId     String
+  receivedAt        DateTime                        @default(now())
+  processedAt       DateTime?
+  createdAt         DateTime                        @default(now())
+  updatedAt         DateTime                        @updatedAt
+  organization      Organization?                   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  signingSession    SigningSession?                 @relation(fields: [signingSessionId], references: [id], onDelete: SetNull)
+
+  @@index([provider, providerSessionId, createdAt])
+  @@index([signingSessionId, processingStatus])
+  @@index([correlationId])
+}
+
+model Reminder {
+  id               String            @id @default(cuid())
+  companyId        String
+  briefingRecordId String?
+  employeeId       String?
+  type             ReminderType
+  status           ReminderStatus    @default(pending)
+  title            String
+  message          String
+  dueAt            DateTime
+  sentAt           DateTime?
+  resolvedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  briefingRecord   BriefingRecord?   @relation(fields: [briefingRecordId], references: [id], onDelete: Cascade)
+  employee         Employee?         @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  notificationJobs NotificationJob[]
+
+  @@index([companyId, status, dueAt])
+}
+
+model NotificationJob {
+  id               String                @id @default(cuid())
+  companyId        String
+  reminderId       String?
+  briefingRecordId String?
+  assigneeUserId   String?
+  channel          NotificationChannel   @default(IN_APP)
+  type             ReminderType
+  status           NotificationJobStatus @default(queued)
+  scheduledAt      DateTime
+  processedAt      DateTime?
+  attempts         Int                   @default(0)
+  payload          Json?
+  lastError        String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  company          Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  reminder         Reminder?             @relation(fields: [reminderId], references: [id], onDelete: SetNull)
+  briefingRecord   BriefingRecord?       @relation(fields: [briefingRecordId], references: [id], onDelete: SetNull)
+  assigneeUser     User?                 @relation("NotificationAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, scheduledAt])
+}
+
+model AuditLog {
+  id               String          @id @default(cuid())
+  companyId        String?
+  actorUserId      String?
+  briefingRecordId String?
+  action           String
+  entityType       String
+  entityId         String
+  metadata         Json?
+  ipAddress        String?
+  userAgent        String?
+  createdAt        DateTime        @default(now())
+  company          Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  actorUser        User?           @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
+  briefingRecord   BriefingRecord? @relation("BriefingAuditLogs", fields: [briefingRecordId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([entityType, entityId])
+}
+
+enum ScopeType {
+  ORGANIZATION
+  BRANCH
+  DEPARTMENT
+  WORK_SITE
+}
+
+enum PrincipalType {
+  USER
+  ROLE
+  CONTRACTOR_ORGANIZATION
+  CONTRACTOR_WORKER
+}
+
+enum AccessLevel {
+  READ
+  WRITE
+  APPROVE
+  SIGN
+  ARCHIVE
+}
+
+enum BriefingParticipantStatus {
+  ASSIGNED
+  OPENED
+  ACKNOWLEDGED
+  SIGNED
+  OVERDUE
+  ARCHIVED
+}
+
+enum QualificationDocumentStatus {
+  DRAFT
+  ACTIVE
+  EXPIRING
+  EXPIRED
+  ANNULLED
+  ARCHIVED
+}
+
+enum QualificationDocumentKind {
+  CERTIFICATE
+  LICENSE
+  MEDICAL_CLEARANCE
+  ATTESTATION
+  OTHER
+}
+
+enum ComplianceDocumentTypeCategory {
+  DOCUMENT
+  TRAINING
+  INSTRUCTION
+}
+
+enum EmployeeDocumentVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model Organization {
+  id                  String                @id
+  legacyCompanyId     String?               @unique
+  code                String                @unique
+  name                String
+  bin                 String?               @unique
+  timezone            String                @default("Asia/Almaty")
+  isActive            Boolean               @default(true)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  branches            Branch[]
+  workSites           WorkSite[]
+  positions           Position[]
+  scopeGrants         ScopeGrant[]
+  contractorOrganizations ContractorOrganization[]
+  contractorWorkers   ContractorWorker[]
+  clearanceTypes      ClearanceType[]
+  trainingTypes       TrainingType[]
+  documentTemplates   DocumentTemplate[]
+  approvalRoutes     ApprovalRoute[]
+  documentEnvelopes   DocumentEnvelope[]
+  certificateMetadata CertificateMetadata[]
+  signatures          Signature[]
+  signingSessions     SigningSession[]
+  signingProviderConfigs SigningProviderConfig[]
+  signatureEvidence   SignatureEvidence[]
+  providerCallbackEvents ProviderCallbackEvent[]
+  attachments         Attachment[]
+  exportSnapshots     ExportSnapshot[]
+  retentionPolicies   RetentionPolicy[]
+  archiveRecords      ArchiveRecord[]
+  jobRequirementMatrices JobRequirementMatrix[]
+  trainingPlans       TrainingPlan[]
+  orders              Order[]
+  briefingJournals    BriefingJournal[]
+  protocols           Protocol[]
+  responsibilityOrders ResponsibilityOrder[]
+  responsibilityAppointments ResponsibilityAppointment[]
+  workPermits         WorkPermit[]
+  responsibleAssignments ResponsibleAssignment[]
+  qualificationDocuments QualificationDocument[]
+  admissionEvaluations AdmissionEvaluation[]
+  complianceDocumentTypes ComplianceDocumentType[]
+
+  @@index([isActive])
+}
+
+model Branch {
+  id              String     @id @default(cuid())
+  organizationId  String
+  code            String
+  name            String
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workSites       WorkSite[]
+  positions       Position[]
+  scopeGrants     ScopeGrant[]
+  documentEnvelopes DocumentEnvelope[]
+  briefingJournals BriefingJournal[]
+  protocols        Protocol[]
+  responsibilityOrders ResponsibilityOrder[]
+  responsibilityAppointments ResponsibilityAppointment[]
+  workPermits     WorkPermit[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, isActive])
+}
+
+model WorkSite {
+  id              String     @id @default(cuid())
+  organizationId  String
+  branchId        String?
+  code            String
+  name            String
+  location        String?
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch          Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  scopeGrants     ScopeGrant[]
+  documentEnvelopes DocumentEnvelope[]
+  briefingJournals BriefingJournal[]
+  protocols        Protocol[]
+  responsibilityOrders ResponsibilityOrder[]
+  responsibilityAppointments ResponsibilityAppointment[]
+  workPermits     WorkPermit[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, isActive])
+  @@index([branchId, isActive])
+}
+
+model Position {
+  id              String     @id @default(cuid())
+  organizationId  String
+  branchId        String?
+  code            String
+  name            String
+  grade           String?
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch          Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  jobRequirementMatrices JobRequirementMatrix[]
+  trainingPlans   TrainingPlan[]
+  employees       Employee[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, isActive])
+}
+
+model ScopeGrant {
+  id              String     @id @default(cuid())
+  organizationId  String
+  principalType   PrincipalType
+  principalId     String
+  scopeType       ScopeType
+  branchId        String?
+  departmentId    String?
+  workSiteId      String?
+  accessLevel     AccessLevel
+  businessProcessType String?
+  startsAt        DateTime
+  endsAt          DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch          Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  workSite        WorkSite?   @relation(fields: [workSiteId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, principalType, principalId])
+  @@index([organizationId, scopeType, accessLevel])
+  @@index([branchId, departmentId, workSiteId])
+}
+
+model ContractorOrganization {
+  id              String     @id @default(cuid())
+  organizationId  String
+  code            String
+  name            String
+  bin             String?
+  contactEmail    String?
+  contactPhone    String?
+  notes           String?
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workers         ContractorWorker[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, isActive])
+}
+
+model ContractorWorker {
+  id                     String      @id @default(cuid())
+  organizationId         String
+  contractorOrganizationId String
+  fullName               String
+  iinEncrypted           String
+  iinHash                String
+  iinLast4               String
+  workerNumber           String
+  email                  String?
+  phone                  String?
+  positionTitle          String?
+  employeeKind           EmployeeKind @default(CONTRACTOR)
+  status                 EmployeeStatus @default(active)
+  isArchived             Boolean     @default(false)
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contractorOrganization ContractorOrganization @relation(fields: [contractorOrganizationId], references: [id], onDelete: Cascade)
+  qualificationDocuments  QualificationDocument[]
+  brigadeMembers          BrigadeMember[]
+  responsibleAssignments  ResponsibleAssignment[]
+
+  @@unique([organizationId, iinHash])
+  @@unique([organizationId, workerNumber])
+  @@index([organizationId, fullName])
+  @@index([organizationId, status])
+}
+
+model ClearanceType {
+  id              String     @id @default(cuid())
+  organizationId  String
+  code            String
+  name            String
+  description     String?
+  validityDays    Int?
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  qualificationDocuments QualificationDocument[]
+
+  @@unique([organizationId, code])
+}
+
+model TrainingType {
+  id              String     @id @default(cuid())
+  organizationId  String
+  code            String
+  name            String
+  description     String?
+  validityDays    Int?
+  requiresExam    Boolean    @default(false)
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  qualificationDocuments QualificationDocument[]
+
+  @@unique([organizationId, code])
+}
+
+model ComplianceDocumentType {
+  id                  String                        @id @default(cuid())
+  organizationId      String
+  code                String
+  name                String
+  category            ComplianceDocumentTypeCategory
+  description         String?
+  defaultValidityDays Int?
+  requiresExpiry      Boolean                       @default(true)
+  requiresVerification Boolean                      @default(true)
+  isActive            Boolean                       @default(true)
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+  organization        Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employeeDocuments   EmployeeDocument[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, category, isActive])
+}
+
+enum DocumentKind {
+  EMPLOYEE_DOCUMENT
+  QUALIFICATION_DOCUMENT
+  TRAINING_PLAN
+  ORDER
+  BRIEFING_JOURNAL
+  BRIEFING_JOURNAL_ENTRY
+  PROTOCOL
+  WORK_PERMIT
+}
+
+enum DocumentEnvelopeStatus {
+  DRAFT
+  IN_APPROVAL
+  SIGNING_READY
+  SIGNED
+  ACTIVE
+  SUPERSEDED
+  ANNULLED
+  ARCHIVED
+}
+
+enum DocumentVersionStatus {
+  DRAFT
+  FINAL
+  SIGNED
+  VOIDED
+}
+
+enum DocumentTemplateStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum ApprovalRouteStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum ApprovalStepAction {
+  REVIEW
+  APPROVE
+  SIGN
+  ACKNOWLEDGE
+}
+
+enum SignatureVerificationResult {
+  PASS
+  FAIL
+}
+
+enum ArchiveRecordStatus {
+  PENDING
+  SEALED
+  ARCHIVED
+  LEGAL_HOLD
+  DISPOSAL_SCHEDULED
+  DESTROYED
+}
+
+enum RetentionUnit {
+  DAYS
+  MONTHS
+  YEARS
+  INDEFINITE
+}
+
+enum AttachmentOwnerType {
+  DOCUMENT_ENVELOPE
+  DOCUMENT_VERSION
+  WORK_PERMIT
+  WORK_PERMIT_VERSION
+  BRIEFING_JOURNAL_ENTRY
+  ORDER_VERSION
+  ARCHIVE_RECORD
+}
+
+enum ExportSnapshotFormat {
+  PDF_A_1
+  PDF
+  JSON
+  ZIP
+}
+
+model DocumentTemplate {
+  id              String     @id @default(cuid())
+  organizationId  String
+  templateCode    String
+  documentKind    DocumentKind
+  scopeType       ScopeType
+  templateVersion Int
+  status          DocumentTemplateStatus @default(DRAFT)
+  schemaJson      Json
+  renderPolicyJson Json
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documentEnvelopes DocumentEnvelope[]
+  documentVersions DocumentVersion[]
+
+  @@unique([organizationId, templateCode, templateVersion])
+  @@index([organizationId, documentKind, scopeType, status])
+}
+
+model ApprovalRoute {
+  id              String     @id @default(cuid())
+  organizationId  String
+  routeCode       String
+  documentKind    DocumentKind
+  scopeType       ScopeType
+  routeVersion    Int
+  status          ApprovalRouteStatus @default(DRAFT)
+  isDefault       Boolean    @default(false)
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documentEnvelopes DocumentEnvelope[]
+  steps           ApprovalStep[]
+
+  @@unique([organizationId, routeCode, routeVersion])
+  @@index([organizationId, documentKind, scopeType, status])
+}
+
+model ApprovalStep {
+  id                  String     @id @default(cuid())
+  routeId             String
+  stepNo              Int
+  groupKey            String?
+  quorum              Int        @default(1)
+  action              ApprovalStepAction
+  requiredRoleCode    String?
+  requiredPrincipalType String?
+  requiredPrincipalId  String?
+  requiredDepartmentId String?
+  requiredBranchId    String?
+  requiredWorkSiteId  String?
+  slaHours            Int?
+  isMandatory         Boolean    @default(true)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  route               ApprovalRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@unique([routeId, stepNo])
+  @@index([routeId, action])
+}
+
+model DocumentEnvelope {
+  id              String     @id @default(cuid())
+  organizationId  String
+  documentKind    DocumentKind
+  scopeType       ScopeType
+  branchId        String?
+  departmentId    String?
+  workSiteId      String?
+  businessObjectType String
+  businessObjectId String
+  documentNumber  String
+  title           String
+  status          DocumentEnvelopeStatus @default(DRAFT)
+  templateId      String?
+  approvalRouteId String?
+  currentVersionId String?
+  createdByUserId String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch          Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  workSite        WorkSite?   @relation(fields: [workSiteId], references: [id], onDelete: SetNull)
+  template        DocumentTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  approvalRoute   ApprovalRoute? @relation(fields: [approvalRouteId], references: [id], onDelete: SetNull)
+  currentVersion  DocumentVersion? @relation("CurrentEnvelopeVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions        DocumentVersion[] @relation("EnvelopeVersions")
+  signatures      Signature[] @relation("EnvelopeSignatures")
+  signingSessions SigningSession[]
+  signatureEvidence SignatureEvidence[]
+  exportSnapshots  ExportSnapshot[]
+  archiveRecords   ArchiveRecord[]
+  trainingPlanVersions TrainingPlanVersion[]
+  orderVersions   OrderVersion[]
+  basisForOrders   Order[] @relation("OrderBasisDocument")
+  employeeDocuments EmployeeDocument[]
+  briefingJournalEntries BriefingJournalEntry[]
+  protocol        Protocol?
+  responsibilityOrder ResponsibilityOrder?
+  workPermitVersions WorkPermitVersion[]
+  qualificationDocuments QualificationDocument[]
+
+  @@unique([organizationId, documentKind, documentNumber])
+  @@index([organizationId, status])
+  @@index([organizationId, scopeType, branchId, workSiteId])
+}
+
+model DocumentVersion {
+  id              String     @id @default(cuid())
+  envelopeId      String
+  versionNo       Int
+  templateId      String?
+  status          DocumentVersionStatus @default(DRAFT)
+  payloadJson     Json
+  renderedHash    String?
+  changeReason    String?
+  createdByUserId String?
+  createdAt       DateTime   @default(now())
+  signedAt        DateTime?
+  annulledAt      DateTime?
+  effectiveFrom   DateTime?
+  effectiveTo     DateTime?
+  envelope        DocumentEnvelope @relation("EnvelopeVersions", fields: [envelopeId], references: [id], onDelete: Cascade)
+  template        DocumentTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  currentForEnvelope DocumentEnvelope[] @relation("CurrentEnvelopeVersion")
+  currentForProtocols Protocol[] @relation("CurrentProtocolVersion")
+  currentForResponsibilityOrders ResponsibilityOrder[] @relation("CurrentResponsibilityOrderVersion")
+  signatures      Signature[] @relation("VersionSignatures")
+  signingSessions SigningSession[]
+  signatureEvidence SignatureEvidence[]
+  exportSnapshots ExportSnapshot[]
+  archiveRecords  ArchiveRecord[]
+
+  @@unique([envelopeId, versionNo])
+  @@index([envelopeId, status])
+}
+
+model CertificateMetadata {
+  id              String     @id @default(cuid())
+  organizationId  String
+  provider        String
+  serial          String
+  thumbprint      String
+  subjectDn       String
+  issuerDn        String
+  validFrom       DateTime
+  validTo         DateTime
+  source          String
+  isRevoked       Boolean    @default(false)
+  revocationReason String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  signatures      Signature[]
+
+  @@unique([organizationId, serial])
+  @@index([thumbprint])
+}
+
+model SignatureVerification {
+  id              String    @id @default(cuid())
+  signatureId     String    @unique
+  checkedAt       DateTime
+  result          SignatureVerificationResult
+  chainStatus     String?
+  revocationStatus String?
+  evidenceJson    Json?
+  errorCode       String?
+  verifiedByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  signature       Signature @relation(fields: [signatureId], references: [id], onDelete: Cascade)
+}
+
+model Attachment {
+  id              String     @id @default(cuid())
+  organizationId  String
+  ownerType       AttachmentOwnerType
+  ownerId         String
+  fileName        String
+  mimeType        String
+  sizeBytes       Int
+  sha256          String
+  storageUri      String
+  createdByUserId String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, ownerType, ownerId])
+  @@index([organizationId, sha256])
+}
+
+model ExportSnapshot {
+  id              String     @id @default(cuid())
+  organizationId  String
+  envelopeId      String
+  versionId       String?
+  format          ExportSnapshotFormat @default(PDF_A_1)
+  storageUri      String
+  sha256          String
+  manifestJson    Json?
+  generatedByUserId String?
+  generatedAt     DateTime   @default(now())
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  envelope        DocumentEnvelope @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  version         DocumentVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, envelopeId, format])
+}
+
+model RetentionPolicy {
+  id              String     @id @default(cuid())
+  organizationId  String
+  retentionCode   String
+  documentKind    DocumentKind
+  scopeType       ScopeType
+  retentionValue  Int
+  retentionUnit   RetentionUnit
+  archiveFormat   ExportSnapshotFormat @default(PDF_A_1)
+  legalBasis      String
+  holdAllowed     Boolean    @default(true)
+  destructionApprovalRequired Boolean @default(false)
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  description     String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  protocols       Protocol[]
+  responsibilityOrders ResponsibilityOrder[]
+  archiveRecords   ArchiveRecord[]
+
+  @@unique([organizationId, retentionCode, effectiveFrom])
+  @@index([organizationId, documentKind, scopeType])
+}
+
+model ArchiveRecord {
+  id              String     @id @default(cuid())
+  organizationId  String
+  envelopeId      String
+  versionId       String?
+  retentionPolicyId String
+  status          ArchiveRecordStatus @default(PENDING)
+  sealedAt        DateTime?
+  archivedAt      DateTime?
+  disposalEligibleAt DateTime?
+  disposedAt      DateTime?
+  archiveManifestHash String
+  storageUri      String?
+  holdReason      String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  envelope        DocumentEnvelope @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  version         DocumentVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
+  retentionPolicy RetentionPolicy @relation(fields: [retentionPolicyId], references: [id], onDelete: Restrict)
+  protocols       Protocol[] @relation("ProtocolArchiveRecord")
+  responsibilityOrders ResponsibilityOrder[] @relation("ResponsibilityOrderArchiveRecord")
+
+  @@index([organizationId, envelopeId])
+  @@index([organizationId, status])
+}
+
+enum AdmissionStatus {
+  DOPUSHEN
+  OGRANICHENNO_DOPUSHEN
+  NE_DOPUSHEN
+}
+
+enum AdmissionSubjectType {
+  EMPLOYEE
+  CONTRACTOR_WORKER
+}
+
+enum AdmissionSeverity {
+  BLOCKER
+  WARNING
+}
+
+enum WorkPermitType {
+  HOT_WORK
+  CONFINED_SPACE
+  ELECTRICAL
+  LIFTING
+  OTHER
+}
+
+enum MatrixStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum MatrixVersionStatus {
+  DRAFT
+  APPROVED
+  ACTIVE
+  SUPERSEDED
+  ANNULLED
+}
+
+enum TrainingPlanStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  PUBLISHED
+  REVISED
+  SUPERSEDED
+  ANNULLED
+  ARCHIVED
+}
+
+enum TrainingPlanVersionStatus {
+  DRAFT
+  FINAL
+  SIGNED
+  VOIDED
+}
+
+enum OrderStatus {
+  DRAFT
+  IN_APPROVAL
+  APPROVED
+  SIGNING_READY
+  SIGNED
+  ACTIVE
+  CANCELED
+  SUPERSEDED
+  ARCHIVED
+}
+
+enum OrderVersionStatus {
+  DRAFT
+  FINAL
+  SIGNED
+  VOIDED
+}
+
+enum BriefingJournalStatus {
+  DRAFT
+  IN_APPROVAL
+  SIGNING_READY
+  SIGNED
+  ACTIVE
+  SUPERSEDED
+  ANNULLED
+  ARCHIVED
+}
+
+enum BriefingJournalEntryStatus {
+  DRAFT
+  OPENED
+  ACKNOWLEDGED
+  SIGNING_READY
+  PARTIALLY_SIGNED
+  SIGNED
+  SUPERSEDED
+  ANNULLED
+  ARCHIVED
+}
+
+enum WorkPermitStatus {
+  DRAFT
+  SUBMITTED
+  IN_APPROVAL
+  APPROVED
+  SIGNING_READY
+  SIGNED
+  ACTIVE
+  CLOSED
+  SUSPENDED
+  EXPIRED
+  ANNULLED
+  ARCHIVED
+}
+
+enum WorkPermitVersionStatus {
+  DRAFT
+  FINAL
+  SIGNED
+  VOIDED
+}
+
+enum ProtocolStatus {
+  DRAFT
+  SIGNING_READY
+  SIGNED
+  ANNULLED
+  SUPERSEDED
+  EXPIRED
+}
+
+enum ResponsibilityOrderStatus {
+  DRAFT
+  SIGNING_READY
+  SIGNED
+  ACTIVE
+  ANNULLED
+  SUPERSEDED
+  EXPIRED
+}
+
+enum ResponsibilityType {
+  OCCUPATIONAL_SAFETY_RESPONSIBLE
+  FIRE_SAFETY_RESPONSIBLE
+  DEPARTMENT_RESPONSIBLE
+  OBJECT_RESPONSIBLE
+  INSTRUCTOR_APPOINTMENT
+  BRIEFING_AUTHORIZED_PERSON
+  PERMIT_ISSUER_AUTHORIZED_PERSON
+  RESPONSIBLE_WORK_MANAGER
+}
+
+enum ProtocolCommissionRole {
+  CHAIRMAN
+  MEMBER
+}
+
+enum ResponsibleType {
+  EMPLOYEE
+  CONTRACTOR_WORKER
+  ROLE
+}
+
+enum BrigadeMemberStatus {
+  ASSIGNED
+  READY
+  SIGNED
+  REJECTED
+}
+
+model JobRequirementMatrix {
+  id              String     @id @default(cuid())
+  organizationId  String
+  positionId      String?
+  matrixCode      String
+  status          MatrixStatus @default(DRAFT)
+  currentVersionId String?
+  effectiveFrom   DateTime?
+  effectiveTo     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  position        Position?   @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  versions        JobRequirementMatrixVersion[]
+  currentVersion  JobRequirementMatrixVersion? @relation("CurrentMatrixVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  admissionEvaluations AdmissionEvaluation[]
+
+  @@unique([organizationId, matrixCode])
+  @@index([organizationId, status])
+}
+
+model JobRequirementMatrixVersion {
+  id              String     @id @default(cuid())
+  matrixId        String
+  versionNo       Int
+  status          MatrixVersionStatus @default(DRAFT)
+  payloadJson     Json
+  createdByUserId String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  effectiveFrom   DateTime?
+  effectiveTo     DateTime?
+  matrix          JobRequirementMatrix @relation(fields: [matrixId], references: [id], onDelete: Cascade)
+  currentForMatrix JobRequirementMatrix[] @relation("CurrentMatrixVersion")
+  admissionEvaluations AdmissionEvaluation[]
+
+  @@unique([matrixId, versionNo])
+  @@index([matrixId, status])
+}
+
+model TrainingPlan {
+  id              String     @id @default(cuid())
+  organizationId  String
+  planCode        String
+  title           String
+  description     String?
+  positionId      String?
+  matrixVersionId String?
+  status          TrainingPlanStatus @default(DRAFT)
+  currentVersionId String?
+  requiresExam    Boolean    @default(false)
+  effectiveFrom   DateTime?
+  effectiveTo     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  position        Position?   @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  versions        TrainingPlanVersion[]
+  currentVersion  TrainingPlanVersion? @relation("CurrentTrainingPlanVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, planCode])
+  @@index([organizationId, status])
+}
+
+model TrainingPlanVersion {
+  id              String     @id @default(cuid())
+  trainingPlanId  String
+  versionNo       Int
+  status          TrainingPlanVersionStatus @default(DRAFT)
+  payloadJson     Json
+  documentEnvelopeId String?
+  createdByUserId String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  trainingPlan    TrainingPlan @relation(fields: [trainingPlanId], references: [id], onDelete: Cascade)
+  documentEnvelope DocumentEnvelope? @relation(fields: [documentEnvelopeId], references: [id], onDelete: SetNull)
+  currentForPlan  TrainingPlan[] @relation("CurrentTrainingPlanVersion")
+  admissionEvaluations AdmissionEvaluation[]
+
+  @@unique([trainingPlanId, versionNo])
+  @@index([trainingPlanId, status])
+}
+
+model Order {
+  id              String     @id @default(cuid())
+  organizationId  String
+  orderCode       String
+  orderType       String
+  subject         String
+  basisDocumentId String?
+  status          OrderStatus @default(DRAFT)
+  currentVersionId String?
+  effectiveFrom   DateTime?
+  effectiveTo     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  basisDocument   DocumentEnvelope? @relation("OrderBasisDocument", fields: [basisDocumentId], references: [id], onDelete: SetNull)
+  versions        OrderVersion[]
+  currentVersion  OrderVersion? @relation("CurrentOrderVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, orderCode])
+  @@index([organizationId, status])
+}
+
+model OrderVersion {
+  id              String     @id @default(cuid())
+  orderId         String
+  versionNo       Int
+  status          OrderVersionStatus @default(DRAFT)
+  payloadJson     Json
+  documentEnvelopeId String?
+  createdByUserId String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  order           Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  documentEnvelope DocumentEnvelope? @relation(fields: [documentEnvelopeId], references: [id], onDelete: SetNull)
+  currentForOrder  Order[] @relation("CurrentOrderVersion")
+  responsibleAssignments ResponsibleAssignment[]
+
+  @@unique([orderId, versionNo])
+  @@index([orderId, status])
+}
+
+model ResponsibleAssignment {
+  id              String     @id @default(cuid())
+  organizationId  String
+  orderVersionId  String
+  responsibleType ResponsibleType
+  employeeId      String?
+  contractorWorkerId String?
+  roleCode        String?
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  orderVersion    OrderVersion @relation(fields: [orderVersionId], references: [id], onDelete: Cascade)
+  contractorWorker ContractorWorker? @relation(fields: [contractorWorkerId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, orderVersionId])
+  @@index([organizationId, responsibleType])
+}
+
+model BriefingJournal {
+  id              String     @id @default(cuid())
+  organizationId  String
+  journalCode     String
+  title           String
+  scopeType       ScopeType
+  branchId        String?
+  departmentId    String?
+  workSiteId      String?
+  status          BriefingJournalStatus @default(DRAFT)
+  currentVersionId String?
+  effectiveFrom   DateTime?
+  effectiveTo     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch          Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  workSite        WorkSite?   @relation(fields: [workSiteId], references: [id], onDelete: SetNull)
+  entries         BriefingJournalEntry[]
+
+  @@unique([organizationId, journalCode])
+  @@index([organizationId, status])
+}
+
+model BriefingJournalEntry {
+  id                String     @id @default(cuid())
+  organizationId    String
+  journalId         String
+  entryNo           Int
+  registrationNo    String?
+  journalKind       BriefingJournalKind
+  employeeId        String
+  instructorUserId  String
+  departmentId      String?
+  workSiteId        String?
+  briefingType      BriefingType
+  status            BriefingJournalEntryStatus @default(DRAFT)
+  employeeStatus    BriefingParticipantStatus @default(ASSIGNED)
+  briefingDate      DateTime
+  briefingTime      DateTime?
+  topic             String
+  program           String?
+  basis             String?
+  unscheduledReason String?
+  notes             String?
+  openedAt          DateTime?
+  acknowledgedAt    DateTime?
+  signedAt          DateTime?
+  archivedAt        DateTime?
+  finalSignedAt     DateTime?
+  documentHash      String?
+  documentEnvelopeId String?
+  archiveRecordId   String?
+  retentionPolicyId String?
+  replacesEntryId   String?
+  annulReason       String?
+  createdByUserId   String?
+  updatedByUserId   String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  journal           BriefingJournal @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  documentEnvelope  DocumentEnvelope? @relation(fields: [documentEnvelopeId], references: [id], onDelete: SetNull)
+  signatures        Signature[]
+  admissionEvaluations AdmissionEvaluation[]
+
+  @@unique([journalId, entryNo])
+  @@unique([organizationId, registrationNo])
+  @@index([organizationId, status, briefingDate])
+  @@index([organizationId, employeeId, briefingDate])
+  @@index([organizationId, instructorUserId, briefingDate])
+  @@index([organizationId, journalKind, briefingType, briefingDate])
+  @@index([organizationId, departmentId, briefingDate])
+  @@index([journalId, status])
+  @@index([replacesEntryId])
+}
+
+model WorkPermit {
+  id              String     @id @default(cuid())
+  organizationId  String
+  permitCode      String
+  permitType      WorkPermitType
+  title           String
+  scopeType       ScopeType
+  branchId        String?
+  departmentId    String?
+  workSiteId      String?
+  status          WorkPermitStatus @default(DRAFT)
+  currentVersionId String?
+  issuedAt        DateTime?
+  startedAt       DateTime?
+  closedAt        DateTime?
+  effectiveFrom   DateTime?
+  effectiveTo     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch          Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  workSite        WorkSite?   @relation(fields: [workSiteId], references: [id], onDelete: SetNull)
+  currentVersion  WorkPermitVersion? @relation("CurrentWorkPermitVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions        WorkPermitVersion[]
+  brigades        Brigade[]
+  admissionEvaluations AdmissionEvaluation[]
+
+  @@unique([organizationId, permitCode])
+  @@index([organizationId, status])
+}
+
+model WorkPermitVersion {
+  id              String     @id @default(cuid())
+  permitId        String
+  versionNo       Int
+  status          WorkPermitVersionStatus @default(DRAFT)
+  payloadJson     Json
+  documentEnvelopeId String?
+  createdByUserId String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  permit          WorkPermit @relation(fields: [permitId], references: [id], onDelete: Cascade)
+  documentEnvelope DocumentEnvelope? @relation(fields: [documentEnvelopeId], references: [id], onDelete: SetNull)
+  currentForPermit WorkPermit[] @relation("CurrentWorkPermitVersion")
+
+  @@unique([permitId, versionNo])
+  @@index([permitId, status])
+}
+
+model Protocol {
+  id              String     @id @default(cuid())
+  organizationId  String
+  number          String
+  date            DateTime
+  protocolType    String
+  basis           String
+  scopeType       ScopeType
+  branchId        String?
+  departmentId    String?
+  workSiteId      String?
+  status          ProtocolStatus @default(DRAFT)
+  decision        String
+  notes           String?
+  documentEnvelopeId String? @unique
+  currentVersionId String?
+  currentVersionNo Int?
+  signedAt        DateTime?
+  archiveRecordId String?
+  retentionPolicyId String?
+  replacesProtocolId String?
+  createdByUserId String?
+  updatedByUserId String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch          Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  department      Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  workSite        WorkSite?  @relation(fields: [workSiteId], references: [id], onDelete: SetNull)
+  documentEnvelope DocumentEnvelope? @relation(fields: [documentEnvelopeId], references: [id], onDelete: SetNull)
+  currentVersion  DocumentVersion? @relation("CurrentProtocolVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  archiveRecord   ArchiveRecord? @relation("ProtocolArchiveRecord", fields: [archiveRecordId], references: [id], onDelete: SetNull)
+  retentionPolicy RetentionPolicy? @relation(fields: [retentionPolicyId], references: [id], onDelete: SetNull)
+  replacesProtocol Protocol? @relation("ProtocolReplacement", fields: [replacesProtocolId], references: [id], onDelete: SetNull)
+  replacements    Protocol[] @relation("ProtocolReplacement")
+  employees       ProtocolEmployee[]
+  commissionMembers ProtocolCommissionMember[]
+  admissionEvaluations AdmissionEvaluation[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status, date])
+  @@index([organizationId, departmentId, status])
+  @@index([organizationId, branchId, workSiteId])
+  @@index([replacesProtocolId])
+}
+
+model ResponsibilityOrder {
+  id              String     @id @default(cuid())
+  organizationId  String
+  number          String
+  date            DateTime
+  responsibilityType ResponsibilityType
+  title           String
+  basis           String
+  notes           String?
+  scopeType       ScopeType
+  branchId        String?
+  departmentId    String?
+  workSiteId      String?
+  status          ResponsibilityOrderStatus @default(DRAFT)
+  documentEnvelopeId String? @unique
+  currentVersionId String?
+  currentVersionNo Int?
+  signedAt        DateTime?
+  archiveRecordId String?
+  retentionPolicyId String?
+  replacesOrderId String?
+  annulReason     String?
+  createdByUserId String?
+  updatedByUserId String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch          Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  department      Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  workSite        WorkSite?  @relation(fields: [workSiteId], references: [id], onDelete: SetNull)
+  documentEnvelope DocumentEnvelope? @relation(fields: [documentEnvelopeId], references: [id], onDelete: SetNull)
+  currentVersion  DocumentVersion? @relation("CurrentResponsibilityOrderVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  archiveRecord   ArchiveRecord? @relation("ResponsibilityOrderArchiveRecord", fields: [archiveRecordId], references: [id], onDelete: SetNull)
+  retentionPolicy RetentionPolicy? @relation(fields: [retentionPolicyId], references: [id], onDelete: SetNull)
+  replacesOrder   ResponsibilityOrder? @relation("ResponsibilityOrderReplacement", fields: [replacesOrderId], references: [id], onDelete: SetNull)
+  replacements    ResponsibilityOrder[] @relation("ResponsibilityOrderReplacement")
+  appointments    ResponsibilityAppointment[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status, date])
+  @@index([organizationId, responsibilityType, status])
+  @@index([organizationId, departmentId, status])
+  @@index([organizationId, branchId, workSiteId])
+  @@index([replacesOrderId])
+}
+
+model ResponsibilityAppointment {
+  id              String     @id @default(cuid())
+  organizationId  String
+  orderId         String
+  employeeId      String
+  responsibilityType ResponsibilityType
+  scopeType       ScopeType
+  branchId        String?
+  departmentId    String?
+  workSiteId      String?
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  zoneOfResponsibility String?
+  roleNotes       String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  order           ResponsibilityOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  employee        Employee   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  branch          Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  department      Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  workSite        WorkSite?  @relation(fields: [workSiteId], references: [id], onDelete: SetNull)
+
+  @@unique([orderId, employeeId])
+  @@index([organizationId, orderId])
+  @@index([organizationId, employeeId, effectiveFrom])
+  @@index([organizationId, responsibilityType, scopeType, branchId, departmentId, workSiteId, effectiveFrom])
+}
+
+model ProtocolEmployee {
+  id              String     @id @default(cuid())
+  protocolId      String
+  employeeId      String
+  sortOrder       Int        @default(0)
+  fullName        String
+  employeeNumber  String?
+  jobTitle        String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  protocol        Protocol   @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+  employee        Employee   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@unique([protocolId, employeeId])
+  @@index([protocolId, sortOrder])
+  @@index([employeeId, protocolId])
+}
+
+model ProtocolCommissionMember {
+  id              String     @id @default(cuid())
+  protocolId      String
+  role            ProtocolCommissionRole
+  sortOrder       Int        @default(0)
+  fullName        String
+  jobTitle        String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  protocol        Protocol   @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+
+  @@index([protocolId, role, sortOrder])
+}
+
+model Brigade {
+  id              String     @id @default(cuid())
+  permitId        String
+  brigadeCode     String
+  title           String
+  leaderEmployeeId String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  permit          WorkPermit @relation(fields: [permitId], references: [id], onDelete: Cascade)
+  members         BrigadeMember[]
+
+  @@unique([permitId, brigadeCode])
+}
+
+model BrigadeMember {
+  id              String     @id @default(cuid())
+  brigadeId       String
+  employeeId      String?
+  contractorWorkerId String?
+  roleCode        String
+  status          BrigadeMemberStatus @default(ASSIGNED)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  brigade         Brigade    @relation(fields: [brigadeId], references: [id], onDelete: Cascade)
+  contractorWorker ContractorWorker? @relation(fields: [contractorWorkerId], references: [id], onDelete: SetNull)
+
+  @@index([brigadeId, status])
+}
+
+model QualificationDocument {
+  id              String     @id @default(cuid())
+  organizationId  String
+  employeeId      String?
+  contractorWorkerId String?
+  clearanceTypeId String?
+  trainingTypeId  String?
+  documentKind    QualificationDocumentKind
+  documentNumber  String
+  issueDate       DateTime
+  expiryDate      DateTime?
+  status          QualificationDocumentStatus @default(DRAFT)
+  documentEnvelopeId String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contractorWorker ContractorWorker? @relation(fields: [contractorWorkerId], references: [id], onDelete: SetNull)
+  clearanceType   ClearanceType? @relation(fields: [clearanceTypeId], references: [id], onDelete: SetNull)
+  trainingType    TrainingType? @relation(fields: [trainingTypeId], references: [id], onDelete: SetNull)
+  documentEnvelope DocumentEnvelope? @relation(fields: [documentEnvelopeId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, documentNumber])
+  @@index([organizationId, status, expiryDate])
+}
+
+model AdmissionEvaluation {
+  id              String     @id @default(cuid())
+  organizationId  String
+  subjectType     AdmissionSubjectType
+  subjectId       String
+  employeeId      String?
+  contractorWorkerId String?
+  branchId        String?
+  departmentId    String?
+  workSiteId      String?
+  positionId      String?
+  workType        WorkPermitType
+  matrixId        String?
+  matrixVersionId String?
+  trainingPlanVersionId String?
+  briefingJournalEntryId String?
+  protocolId      String?
+  workPermitId    String?
+  status          AdmissionStatus
+  decisionCode    String
+  ruleVersion     String
+  evaluatedAt     DateTime
+  nextReviewAt    DateTime?
+  checksJson      Json
+  warningsJson    Json
+  nextActionsJson Json
+  resultJson      Json
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  matrix          JobRequirementMatrix? @relation(fields: [matrixId], references: [id], onDelete: SetNull)
+  matrixVersion   JobRequirementMatrixVersion? @relation(fields: [matrixVersionId], references: [id], onDelete: SetNull)
+  trainingPlanVersion TrainingPlanVersion? @relation(fields: [trainingPlanVersionId], references: [id], onDelete: SetNull)
+  briefingJournalEntry BriefingJournalEntry? @relation(fields: [briefingJournalEntryId], references: [id], onDelete: SetNull)
+  protocol        Protocol? @relation(fields: [protocolId], references: [id], onDelete: SetNull)
+  workPermit      WorkPermit? @relation(fields: [workPermitId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, subjectType, subjectId, evaluatedAt])
+  @@index([organizationId, status, evaluatedAt])
+}

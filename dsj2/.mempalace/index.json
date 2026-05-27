@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "repo": "dsj2",
+  "workspace_root_name": "dsj2",
+  "default_root": ".",
+  "purpose": "Lightweight machine-readable routing for DSJ feature, branch, and area context.",
+  "areas": ["web", "api", "worker", "database", "scripts"],
+  "active_features": [
+    "FEAT-P1-BRIEFING-JOURNAL",
+    "FEAT-P1-RESPONSIBILITY-ORDERS"
+  ],
+  "business_processes": [
+    "briefing_journal_signing",
+    "employee_document_sign_flow",
+    "responsibility_order_assignment",
+    "biot_certificate_generation",
+    "correspondence_document_flow"
+  ],
+  "query_order": [
+    ".mempalace/index.json",
+    ".mempalace/areas.json",
+    ".mempalace/branches.json",
+    ".mempalace/features/<feature>.json",
+    "nearest area AGENTS.md",
+    "area README when present",
+    "canonical files"
+  ],
+  "do_not_load_by_default": [
+    ".codex-runtime",
+    ".playwright-cli",
+    ".runlogs",
+    ".turbo",
+    ".next",
+    ".next.broken.*",
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    "tmp",
+    "__pycache__"
+  ]
+}

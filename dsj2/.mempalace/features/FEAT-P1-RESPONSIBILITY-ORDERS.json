@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-P1-RESPONSIBILITY-ORDERS",
+  "title": "Responsibility Orders",
+  "status": "code_present_verification_not_run_in_hygiene_pass",
+  "priority": "P1",
+  "branch_context": "ABTEST-A",
+  "areas": ["api", "web", "database"],
+  "business_processes": ["responsibility_order_assignment"],
+  "summary": "Responsibility order code paths are present for API lifecycle, web registry/detail/draft/sign routes, shared contracts, and Prisma schema/migration support. This card routes future work to canonical files and does not claim fresh runtime verification.",
+  "canonical_files": [
+    "apps/api/src/responsibility-orders/responsibility-orders.controller.ts",
+    "apps/api/src/responsibility-orders/responsibility-orders.service.ts",
+    "apps/web/actions/responsibility-order.ts",
+    "apps/web/app/(app)/orders/responsibility/page.tsx",
+    "apps/web/app/(app)/orders/responsibility/[id]/page.tsx",
+    "apps/web/app/(app)/orders/responsibility/[id]/sign/page.tsx",
+    "apps/web/components/responsibility-order-draft-form.tsx",
+    "packages/database/prisma/schema.prisma",
+    "packages/database/prisma/migrations/202604121300_responsibility_orders/migration.sql",
+    "packages/types/src/responsibility-order.ts"
+  ],
+  "dependencies": ["FEAT-P1-BRIEFING-JOURNAL"],
+  "verification": {
+    "status": "not_run_in_hygiene_pass",
+    "items": ["targeted typecheck", "registry/detail/sign smoke when behavior changes"]
+  }
+}

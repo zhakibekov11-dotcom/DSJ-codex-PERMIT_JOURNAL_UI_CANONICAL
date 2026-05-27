@@ -1,0 +1,28 @@
+{
+  "id": "FEAT-P1-BRIEFING-JOURNAL",
+  "title": "Briefing Journal Lifecycle",
+  "status": "code_present_verification_not_run_in_hygiene_pass",
+  "priority": "P1",
+  "branch_context": "ABTEST-A",
+  "areas": ["api", "web", "database", "worker"],
+  "business_processes": ["briefing_journal_signing"],
+  "summary": "Briefing journal code paths are present for backend lifecycle, signing, PDF/export, admin web routes, employee self-service routes, and worker reminder support. This card routes future work to canonical files and does not claim fresh runtime verification.",
+  "canonical_files": [
+    "apps/api/src/briefing-records/briefing-records.controller.ts",
+    "apps/api/src/briefing-records/briefing-records.service.ts",
+    "apps/api/src/signatures/signatures.service.ts",
+    "apps/api/src/pdf/pdf.service.ts",
+    "apps/web/actions/briefing.ts",
+    "apps/web/actions/my-instructions.ts",
+    "apps/web/app/(app)/journal/page.tsx",
+    "apps/web/app/(app)/my-instructions/page.tsx",
+    "apps/web/app/invite/[token]/page.tsx",
+    "packages/database/prisma/schema.prisma",
+    "packages/types/src/briefing.ts",
+    "docs/batch-journals-and-invites.md"
+  ],
+  "verification": {
+    "status": "not_run_in_hygiene_pass",
+    "items": ["targeted typecheck", "route smoke", "signing/export smoke when behavior changes"]
+  }
+}

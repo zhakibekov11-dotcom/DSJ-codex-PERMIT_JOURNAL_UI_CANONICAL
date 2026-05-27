@@ -1,0 +1,14 @@
+{
+  "extends": "../../packages/config/tsconfig/nest.json",
+  "compilerOptions": {
+    "baseUrl": "./",
+    "incremental": true,
+    "outDir": "dist",
+    "paths": {
+      "@dsj/database": ["../../packages/database/src"],
+      "@dsj/types": ["../../packages/types/src"],
+      "@dsj/utils": ["../../packages/utils/src"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

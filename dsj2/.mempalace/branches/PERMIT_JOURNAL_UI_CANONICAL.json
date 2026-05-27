@@ -1,0 +1,53 @@
+{
+  "taskId": "PERMIT_JOURNAL_UI_CANONICAL",
+  "title": "Permit Journal UI Canonical Context",
+  "status": "context_initialized",
+  "contour": "big_dsj_contour",
+  "module": "PermitJournalModule",
+  "primaryRoutes": [
+    "/permits",
+    "/permits/new",
+    "/permits/[id]",
+    "/permits/[id]/edit",
+    "/permits/[id]/precheck",
+    "/permits/[id]/approvals",
+    "/permits/[id]/signatures",
+    "/permits/[id]/closure",
+    "/permits/[id]/audit",
+    "/contractors/[id]/access",
+    "/employees/[id]/permits"
+  ],
+  "canonicalContextFile": [
+    "docs/context/PERMIT_JOURNAL_UI_CANONICAL.md"
+  ],
+  "dependsOnModules": [
+    "Employees",
+    "Contractors",
+    "Departments",
+    "Certificates",
+    "Training",
+    "Testing",
+    "InstructionJournals",
+    "Documents",
+    "Correspondence",
+    "Audit",
+    "Signatures / NCALayer evidence"
+  ],
+  "canonicalEnums": [
+    "PermitType",
+    "PermitWorkType",
+    "PermitStatus",
+    "PermitParticipantRole",
+    "PermitAuditEvent"
+  ],
+  "implementationRule": [
+    "Future implementation must follow docs/context/PERMIT_JOURNAL_UI_CANONICAL.md.",
+    "Do not invent permit types.",
+    "Do not invent Adilet legal acts.",
+    "Do not treat derived product logic as direct legal requirement.",
+    "Do not implement P1/P2 industry templates in MVP.",
+    "Do not make signed fields editable after approved.",
+    "Do not treat PDF as signed source of truth.",
+    "Do not hardcode one retention period for all documents."
+  ]
+}

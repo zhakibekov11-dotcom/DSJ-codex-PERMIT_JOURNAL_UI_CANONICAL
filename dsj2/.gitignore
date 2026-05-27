@@ -1,0 +1,53 @@
+# dependencies
+node_modules/
+
+# build output and compiler state
+.next/
+.next.broken.*/
+dist/
+build/
+out/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# runtime, logs, and generated local artifacts
+*.log
+*.out
+*.err
+tmp/
+.runlogs/
+.codex-runtime/
+.playwright/
+.playwright-report/
+.playwright-cli/
+.cache/
+storage/
+
+# Python runtime artifacts
+__pycache__/
+*.py[cod]
+
+# local environment
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.abtest.example
+
+# database local-only files
+packages/database/generated/
+packages/database/prisma/dev.db
+
+# deployment/tooling local state
+.vercel/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+

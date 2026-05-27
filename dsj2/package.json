@@ -1,0 +1,30 @@
+{
+  "name": "digital-safety-journal",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "build": "turbo build",
+    "build:api:deploy": "corepack pnpm --filter @dsj/database db:generate && corepack pnpm --filter @dsj/types build && corepack pnpm --filter @dsj/database build && corepack pnpm --filter @dsj/utils build && corepack pnpm --filter @dsj/api build",
+    "build:worker:deploy": "corepack pnpm --filter @dsj/database db:generate && corepack pnpm --filter @dsj/types build && corepack pnpm --filter @dsj/database build && corepack pnpm --filter @dsj/worker build",
+    "dev": "turbo dev",
+    "lint": "node -e \"console.error('No package-level lint tasks are configured yet. Use pnpm verify as the current compile/build gate.'); process.exit(1)\"",
+    "typecheck": "turbo typecheck",
+    "test": "node -e \"console.error('No package-level test tasks are configured yet. Use pnpm verify as the current compile/build gate.'); process.exit(1)\"",
+    "verify": "pnpm verify:stability",
+    "verify:stability": "pnpm db:generate && pnpm typecheck && pnpm build",
+    "format": "prettier --write .",
+    "db:deploy": "corepack pnpm --filter @dsj/database db:deploy",
+    "db:generate": "corepack pnpm --filter @dsj/database db:generate",
+    "db:migrate": "corepack pnpm --filter @dsj/database db:migrate",
+    "db:seed": "corepack pnpm --filter @dsj/database db:seed"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "eslint": "^9.22.0",
+    "prettier": "^3.5.3",
+    "tsx": "^4.19.3",
+    "turbo": "^2.4.2",
+    "typescript": "^5.8.2"
+  }
+}

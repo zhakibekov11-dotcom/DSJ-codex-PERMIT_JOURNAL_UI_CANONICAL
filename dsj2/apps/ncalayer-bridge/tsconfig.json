@@ -1,0 +1,12 @@
+{
+  "extends": "../../packages/config/tsconfig/node.json",
+  "compilerOptions": {
+    "baseUrl": "./",
+    "outDir": "dist",
+    "paths": {
+      "@dsj/types": ["../../packages/types/src"],
+      "@dsj/utils": ["../../packages/utils/src"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts"]
+}

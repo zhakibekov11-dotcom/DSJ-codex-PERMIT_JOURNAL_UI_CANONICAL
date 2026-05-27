@@ -1,0 +1,56 @@
+{
+  "processes": [
+    {
+      "id": "briefing_journal_signing",
+      "title": "Briefing Journal Signing",
+      "actors": ["company_admin", "safety_engineer", "employee_signer", "public_invite_recipient"],
+      "features": ["FEAT-P1-BRIEFING-JOURNAL"],
+      "canonical_files": [
+        "apps/api/src/briefing-records/briefing-records.service.ts",
+        "apps/api/src/signatures/signatures.service.ts",
+        "apps/web/app/(app)/journal/page.tsx",
+        "apps/web/app/(app)/my-instructions/page.tsx"
+      ]
+    },
+    {
+      "id": "employee_document_sign_flow",
+      "title": "Employee Document Sign Flow",
+      "actors": ["company_admin", "safety_engineer", "employee_signer"],
+      "features": [],
+      "canonical_files": ["apps/api/src/employee-documents/employee-documents.service.ts"]
+    },
+    {
+      "id": "responsibility_order_assignment",
+      "title": "Responsibility Order Assignment",
+      "actors": ["company_admin", "safety_engineer", "employee_signer"],
+      "features": ["FEAT-P1-RESPONSIBILITY-ORDERS"],
+      "canonical_files": [
+        "apps/api/src/responsibility-orders/responsibility-orders.service.ts",
+        "apps/web/app/(app)/orders/responsibility/page.tsx",
+        "packages/types/src/responsibility-order.ts"
+      ]
+    },
+    {
+      "id": "biot_certificate_generation",
+      "title": "BIOT/PTM/PB/PS Certificate Generation",
+      "actors": ["company_admin", "safety_engineer"],
+      "features": [],
+      "canonical_files": [
+        "apps/api/src/biot-cards",
+        "apps/web/components/biot-card-generator.tsx",
+        "docs/experimental"
+      ]
+    },
+    {
+      "id": "correspondence_document_flow",
+      "title": "Correspondence Document Flow",
+      "actors": ["company_admin", "safety_engineer"],
+      "features": [],
+      "canonical_files": [
+        "apps/api/src/correspondence",
+        "apps/web/app/(app)/correspondence/page.tsx",
+        "scripts/generate_correspondence_docx.py"
+      ]
+    }
+  ]
+}

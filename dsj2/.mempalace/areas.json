@@ -1,0 +1,35 @@
+{
+  "areas": {
+    "web": {
+      "paths": ["apps/web"],
+      "readme": "apps/web/README.md",
+      "agents": ["apps/web/AGENTS.md"],
+      "canonical": ["apps/web/app", "apps/web/actions", "apps/web/components", "apps/web/lib"]
+    },
+    "api": {
+      "paths": ["apps/api"],
+      "readme": "apps/api/README.md",
+      "agents": ["apps/api/AGENTS.md"],
+      "canonical": ["apps/api/src"]
+    },
+    "worker": {
+      "paths": ["apps/worker"],
+      "agents": ["apps/worker/AGENTS.md"],
+      "canonical": ["apps/worker/src/main.ts"]
+    },
+    "database": {
+      "paths": ["packages/database"],
+      "agents": ["packages/database/AGENTS.md"],
+      "canonical": [
+        "packages/database/prisma/schema.prisma",
+        "packages/database/prisma/migrations",
+        "packages/database/src/security.ts"
+      ]
+    },
+    "scripts": {
+      "paths": ["scripts"],
+      "agents": ["scripts/AGENTS.md"],
+      "canonical": ["scripts/requirements-runtime.txt", "scripts/*.py"]
+    }
+  }
+}

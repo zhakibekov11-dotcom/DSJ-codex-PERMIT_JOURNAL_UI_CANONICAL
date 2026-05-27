@@ -1,0 +1,21 @@
+{
+  "name": "@dsj/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:railway": "corepack pnpm --dir ../.. build:worker:deploy",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/apps/worker/src/main.js",
+    "start:railway": "node dist/apps/worker/src/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@dsj/database": "workspace:*",
+    "@dsj/utils": "workspace:*",
+    "@prisma/client": "^6.4.1",
+    "bullmq": "^5.41.5",
+    "dotenv": "^16.4.7",
+    "ioredis": "^5.4.2"
+  }
+}

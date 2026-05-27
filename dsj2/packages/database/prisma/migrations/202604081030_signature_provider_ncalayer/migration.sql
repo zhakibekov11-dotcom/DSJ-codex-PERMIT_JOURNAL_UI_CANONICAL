@@ -1,0 +1,1 @@
+ALTER TYPE "SignatureProvider" ADD VALUE IF NOT EXISTS 'NCALAYER';

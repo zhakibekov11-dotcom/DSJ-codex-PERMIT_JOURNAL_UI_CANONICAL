@@ -1,0 +1,12 @@
+{
+  "extends": "../../packages/config/tsconfig/node.json",
+  "compilerOptions": {
+    "baseUrl": "./",
+    "outDir": "dist",
+    "paths": {
+      "@dsj/database": ["../../packages/database/src"],
+      "@dsj/utils": ["../../packages/utils/src"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

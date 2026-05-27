@@ -1,0 +1,28 @@
+{
+  "terms": [
+    {
+      "term": "briefing journal entry",
+      "definition": "A tenant-scoped safety briefing record with lifecycle, signing, invite, PDF, and audit behavior."
+    },
+    {
+      "term": "employee document",
+      "definition": "An employee-facing document record that can participate in document, signing, and evidence workflows."
+    },
+    {
+      "term": "responsibility order",
+      "definition": "A company-scoped order assigning one responsibility type to one or more employee appointments in a defined scope."
+    },
+    {
+      "term": "archive record",
+      "definition": "Evidence and retention metadata attached to finalized document/signature workflows."
+    },
+    {
+      "term": "NCALayer bridge",
+      "definition": "Repo-local transport service that talks to the external NCALayer desktop runtime on a signer machine."
+    },
+    {
+      "term": "BIOT/PTM/PB/PS package",
+      "definition": "Generated compliance document bundle using tracked templates under docs/experimental."
+    }
+  ]
+}

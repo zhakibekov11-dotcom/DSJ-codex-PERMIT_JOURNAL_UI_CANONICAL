@@ -1,0 +1,42 @@
+{
+  "name": "@dsj/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "nest build",
+    "build:railway": "corepack pnpm --dir ../.. build:api:deploy",
+    "dev": "node --watch --require reflect-metadata --require ts-node/register --require tsconfig-paths/register src/main.ts",
+    "start": "node dist/apps/api/src/main.js",
+    "start:railway": "corepack pnpm --dir ../.. db:deploy && node dist/apps/api/src/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@dsj/database": "workspace:*",
+    "@dsj/types": "workspace:*",
+    "@dsj/utils": "workspace:*",
+    "@nestjs/common": "^11.0.11",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "^11.0.11",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/passport": "^11.0.5",
+    "@nestjs/platform-express": "^11.0.11",
+    "@prisma/client": "^6.4.1",
+    "bcryptjs": "^3.0.2",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "pdfkit": "^0.16.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.5",
+    "@nestjs/schematics": "^11.0.3",
+    "@nestjs/testing": "^11.0.11",
+    "@types/express": "^5.0.0",
+    "@types/passport-jwt": "^4.0.1",
+    "@types/pdfkit": "^0.13.8",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0"
+  }
+}

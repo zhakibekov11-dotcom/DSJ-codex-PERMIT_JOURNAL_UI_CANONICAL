@@ -1,0 +1,92 @@
+{
+  "observed_current_branch": "mvp/demo-personas-briefings-permits",
+  "branches": [
+    {
+      "branch": "ABTEST-A",
+      "role": "active_working_branch",
+      "features": [
+        "FEAT-P1-BRIEFING-JOURNAL",
+        "FEAT-P1-RESPONSIBILITY-ORDERS"
+      ],
+      "basis": "Observed with git branch --show-current during the hygiene installation audit."
+    },
+    {
+      "branch": "mvp/demo-personas-briefings-permits",
+      "role": "mvp_demo_branch",
+      "phase": "P2-narrow-demo-contour",
+      "context_document": "docs/context/branches/mvp-demo-personas-briefings-permits.md",
+      "purpose": "Build a narrow client-demo contour across demo personas, hierarchy, briefings, employee signing, permits, reports, handover, and director read-only visibility.",
+      "features": [
+        "FEAT-P1-BRIEFING-JOURNAL",
+        "FEAT-P1-RESPONSIBILITY-ORDERS",
+        "P2-WORK-PERMITS-CORE"
+      ],
+      "steps": [
+        "Step 1 - Demo personas, hierarchy, seeded accounts",
+        "Step 2 - Instruction flow by persona",
+        "Step 3 - Narrow permit flow, work report, handover",
+        "Step 4 - Demo hardening, smoke, polish"
+      ],
+      "step_status": {
+        "step_1": "complete_verified",
+        "step_2": "complete_verified",
+        "step_3": "not_started",
+        "step_4": "not_started"
+      },
+      "last_session": {
+        "date": "2026-04-13",
+        "phase": "P2-narrow-demo-contour",
+        "worked_slice": "STEP-2: closed briefing and journal persona behavior without new auth roles; Safety Engineer can operate org-wide non-primary briefings, Shop Chief can operate scoped primary workplace briefings, Director is read-only, and Employee remains self-service for own briefing records",
+        "files_touched": [
+          "packages/types/src/briefing.ts",
+          "apps/api/src/briefing-records/briefing-records.service.ts",
+          "apps/api/src/signatures/signatures.service.ts",
+          "apps/web/components/briefing-regulation-fields.tsx",
+          "apps/web/app/(app)/journal/page.tsx",
+          "apps/web/app/(app)/journal/new/page.tsx",
+          "apps/web/app/(app)/journal/[id]/page.tsx",
+          "apps/web/app/(app)/journal/[id]/edit/page.tsx",
+          "apps/web/app/(app)/my-instructions/page.tsx",
+          "apps/web/app/(app)/my-instructions/[id]/page.tsx",
+          ".mempalace/branches.json",
+          "docs/context/branches/mvp-demo-personas-briefings-permits.md",
+          "docs/context/FEATURE_BRANCH_MATRIX.md"
+        ],
+        "verification_done": [
+          "corepack pnpm --filter @dsj/types typecheck",
+          "corepack pnpm --filter @dsj/api typecheck",
+          "corepack pnpm --filter @dsj/web typecheck",
+          "guarded local seed run against postgresql://localhost:5433/dsj with SEED_ALLOW_DESTRUCTIVE_RESET=true",
+          "HTTP smoke against current-source API/web on 4010/3010: Safety Engineer created INTRODUCTORY for an out-of-scope employee",
+          "HTTP smoke against current-source API/web on 4010/3010: Shop Chief created scoped PRIMARY",
+          "HTTP smoke against current-source API/web on 4010/3010: Director create, Safety Engineer primary, Shop Chief repeated, and Shop Chief out-of-scope create attempts returned 403",
+          "HTTP smoke against current-source API/web on 4010/3010: Director read-only allowedActions, Shop Chief scoped registry visibility, and employee /my-instructions page load verified",
+          "HTTP smoke against current-source API/web on 4010/3010: Shop Chief primary record prepared for signing through canonical lifecycle"
+        ],
+        "verification_pending": [
+          "End-to-end instructor and employee cryptographic signing smoke was not run because the current environment is not using MOCK_NCALAYER",
+          "Optional visual browser screenshot pass for demo polish"
+        ],
+        "next_action": "Start Step 3 only: narrow permit flow, work report, and handover. Stop point is before any permit behavior in Step 2."
+      },
+      "basis": "Created as branch execution context for the MVP demo personas, briefings, and permits contour."
+    },
+    {
+      "branch": "PERMIT_JOURNAL_UI_CANONICAL",
+      "taskId": "PERMIT_JOURNAL_UI_CANONICAL",
+      "role": "context_branch",
+      "status": "context_initialized",
+      "contour": "big_dsj_contour",
+      "module": "PermitJournalModule",
+      "context_document": ".mempalace/branches/PERMIT_JOURNAL_UI_CANONICAL.json",
+      "branch_documents": [
+        "docs/branches/PERMIT_JOURNAL_UI_CANONICAL-brief.md",
+        "docs/branches/PERMIT_JOURNAL_UI_CANONICAL-plan.md",
+        "docs/branches/PERMIT_JOURNAL_UI_CANONICAL-log.md"
+      ],
+      "canonical_context_file": "docs/context/PERMIT_JOURNAL_UI_CANONICAL.md",
+      "purpose": "Prepare context for the future Permit Journal / Журнал допусков implementation in the big DSJ contour.",
+      "basis": "Created as branch context for Permit Journal UI canonical execution. Future implementation must follow the canonical Markdown file and must not invent permit types, legal acts, fields, statuses, or industry templates outside that source."
+    }
+  ]
+}

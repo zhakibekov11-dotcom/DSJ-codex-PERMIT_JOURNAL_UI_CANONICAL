@@ -9,6 +9,7 @@ import { Prisma } from "@prisma/client";
 import {
   encryptSensitiveValue,
   hashSensitiveValue,
+  hashSensitiveValueLegacy,
   maskIin,
 } from "@dsj/database";
 import type {
@@ -804,6 +805,34 @@ export class CorePlatformService {
     };
   }
 
+  private buildIinHashes(iin: string) {
+    return {
+      current: hashSensitiveValue(iin),
+      legacy: hashSensitiveValueLegacy(iin),
+    };
+  }
+
+  private async ensureContractorWorkerIinAvailable(organizationId: string, iin: string) {
+    const hashes = this.buildIinHashes(iin);
+    const duplicate = await this.prisma.contractorWorker.findFirst({
+      where: {
+        organizationId,
+        iinHash: {
+          in: [...new Set([hashes.current, hashes.legacy])],
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (duplicate) {
+      throw new BadRequestException("Contractor worker with this IIN already exists in the organization.");
+    }
+
+    return hashes;
+  }
+
   private async signEnvelopeDocument(
     user: AuthenticatedUser,
     envelopeId: string,
@@ -1029,6 +1058,10 @@ export class CorePlatformService {
       organization.id,
       input.contractorOrganizationId,
     );
+    const iinHashes = await this.ensureContractorWorkerIinAvailable(
+      organization.id,
+      input.iin,
+    );
 
     const contractorWorker = await this.prisma.contractorWorker.create({
       data: {
@@ -1036,7 +1069,7 @@ export class CorePlatformService {
         contractorOrganizationId: input.contractorOrganizationId,
         fullName: input.fullName,
         iinEncrypted: encryptSensitiveValue(input.iin),
-        iinHash: hashSensitiveValue(input.iin),
+        iinHash: iinHashes.current,
         iinLast4: input.iin.slice(-4),
         workerNumber: input.workerNumber,
         email: input.email ?? null,

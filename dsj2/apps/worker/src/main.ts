@@ -37,6 +37,9 @@ const signingCallbackReconcileQueue = new Queue("dsj-signing-callback-reconcile"
   connection,
 });
 
+const EMAIL_TRANSPORT_NOT_CONFIGURED =
+  "Email notification transport is not configured.";
+
 async function ensureReminder(args: {
   companyId: string;
   briefingRecordId: string;
@@ -47,50 +50,52 @@ async function ensureReminder(args: {
   dueAt: Date;
   assigneeUserId: string;
 }) {
-  const existing = await prisma.reminder.findFirst({
-    where: {
-      companyId: args.companyId,
-      briefingRecordId: args.briefingRecordId,
-      type: args.type,
-      status: {
-        in: ["pending", "sent"],
+  return prisma.$transaction(async (transaction) => {
+    const existing = await transaction.reminder.findFirst({
+      where: {
+        companyId: args.companyId,
+        briefingRecordId: args.briefingRecordId,
+        type: args.type,
+        status: {
+          in: ["pending", "sent"],
+        },
       },
-    },
-  });
+    });
 
-  if (existing) {
-    return existing;
-  }
+    if (existing) {
+      return existing;
+    }
 
-  const reminder = await prisma.reminder.create({
-    data: {
-      companyId: args.companyId,
-      briefingRecordId: args.briefingRecordId,
-      employeeId: args.employeeId,
-      type: args.type,
-      title: args.title,
-      message: args.message,
-      dueAt: args.dueAt,
-    },
-  });
-
-  await prisma.notificationJob.create({
-    data: {
-      companyId: args.companyId,
-      reminderId: reminder.id,
-      briefingRecordId: args.briefingRecordId,
-      assigneeUserId: args.assigneeUserId,
-      type: args.type,
-      channel: "IN_APP",
-      scheduledAt: new Date(),
-      payload: {
+    const reminder = await transaction.reminder.create({
+      data: {
+        companyId: args.companyId,
+        briefingRecordId: args.briefingRecordId,
+        employeeId: args.employeeId,
+        type: args.type,
         title: args.title,
         message: args.message,
+        dueAt: args.dueAt,
       },
-    },
-  });
+    });
 
-  return reminder;
+    await transaction.notificationJob.create({
+      data: {
+        companyId: args.companyId,
+        reminderId: reminder.id,
+        briefingRecordId: args.briefingRecordId,
+        assigneeUserId: args.assigneeUserId,
+        type: args.type,
+        channel: "IN_APP",
+        scheduledAt: new Date(),
+        payload: {
+          title: args.title,
+          message: args.message,
+        },
+      },
+    });
+
+    return reminder;
+  });
 }
 
 function mapSummaryStatusToLegacy(status: "admitted" | "limited" | "blocked") {
@@ -527,6 +532,9 @@ async function dispatchNotifications() {
     take: 50,
   });
 
+  let deliveredCount = 0;
+  let failedCount = 0;
+
   for (const job of queuedJobs) {
     await prisma.notificationJob.update({
       where: { id: job.id },
@@ -538,11 +546,37 @@ async function dispatchNotifications() {
       },
     });
 
+    const processedAt = new Date();
+
+    if (job.channel === "EMAIL") {
+      await prisma.notificationJob.update({
+        where: { id: job.id },
+        data: {
+          status: "failed",
+          processedAt,
+          lastError: EMAIL_TRANSPORT_NOT_CONFIGURED,
+        },
+      });
+
+      if (job.reminderId) {
+        await prisma.reminder.update({
+          where: { id: job.reminderId },
+          data: {
+            status: "failed",
+          },
+        });
+      }
+
+      failedCount += 1;
+      continue;
+    }
+
     await prisma.notificationJob.update({
       where: { id: job.id },
       data: {
         status: "sent",
-        processedAt: new Date(),
+        processedAt,
+        lastError: null,
       },
     });
 
@@ -551,13 +585,17 @@ async function dispatchNotifications() {
         where: { id: job.reminderId },
         data: {
           status: "sent",
-          sentAt: new Date(),
+          sentAt: processedAt,
         },
       });
     }
+
+    deliveredCount += 1;
   }
 
-  console.log(`[worker] отправлено задач уведомлений: ${queuedJobs.length}`);
+  console.log(
+    `[worker] notification jobs processed: ${queuedJobs.length}, in-app sent: ${deliveredCount}, failed: ${failedCount}`,
+  );
 }
 
 async function expireSigningSessions() {

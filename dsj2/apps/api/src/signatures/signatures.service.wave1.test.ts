@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BadRequestException, ForbiddenException } from "@nestjs/common";
-import { encryptSensitiveValue } from "@dsj/database";
+import { encryptSensitiveValue, hashInviteToken } from "@dsj/database";
 import {
   publicBriefingInviteSchema,
   publicSignBriefingSchema,
@@ -12,6 +12,11 @@ const TEST_DIGEST = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789a
 const TEST_IIN = "980317350011";
 
 process.env.FIELD_ENCRYPTION_KEY = "signatures-service-wave1-test-key";
+process.env.FIELD_HASH_PEPPER = "signatures-service-wave1-test-pepper";
+
+function futureDate(daysFromNow = 30) {
+  return new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000);
+}
 
 function createInviteRecord() {
   return {
@@ -26,7 +31,7 @@ function createInviteRecord() {
     topic: "Introductory briefing",
     notes: "Bring PPE",
     inviteToken: "invite-token",
-    inviteTokenExpiresAt: new Date("2026-04-20T00:00:00.000Z"),
+    inviteTokenExpiresAt: futureDate(),
     inviteSentAt: new Date("2026-03-21T00:00:00.000Z"),
     registrationCompletedAt: null,
     signedAt: null,
@@ -95,6 +100,7 @@ function createService(config: Record<string, string | undefined>) {
   const state = {
     briefingRecordUpdateCalls: 0,
     employeeUpdateCalls: 0,
+    findFirstArgs: null as unknown,
     findUniqueCalls: 0,
     signatureCreateCalls: 0,
   };
@@ -102,7 +108,15 @@ function createService(config: Record<string, string | undefined>) {
   const signedAt = new Date("2026-03-22T10:00:00.000Z");
 
   const prisma = {
+    briefingJournalEntry: {
+      findUnique: async () => null,
+    },
     briefingRecord: {
+      findFirst: async (args: unknown) => {
+        state.findUniqueCalls += 1;
+        state.findFirstArgs = args;
+        return record;
+      },
       findUnique: async () => {
         state.findUniqueCalls += 1;
         return record;
@@ -237,7 +251,7 @@ function createService(config: Record<string, string | undefined>) {
 }
 
 test("public invite response stays on the narrowed public DTO", async () => {
-  const { service } = createService({
+  const { service, state } = createService({
     SIGNING_PROVIDER: "MOCK_NCALAYER",
     NODE_ENV: "production",
     ALLOW_PUBLIC_INVITE_MOCK_SIGNING: "true",
@@ -268,12 +282,34 @@ test("public invite response stays on the narrowed public DTO", async () => {
   assert.equal("signatures" in parsedInvite, false);
   assert.equal("site" in parsedInvite, false);
   assert.equal("certificateSerial" in parsedInvite.employee, false);
+  assert.equal("contractorCompany" in parsedInvite.employee, false);
   assert.equal("email" in parsedInvite.employee, false);
+  assert.equal("employeeKind" in parsedInvite.employee, false);
+  assert.equal("employeeNumber" in parsedInvite.employee, false);
   assert.equal("iinEncrypted" in parsedInvite.employee, false);
   assert.equal("phone" in parsedInvite.employee, false);
   assert.equal(parsedInvite.signingDigest, TEST_DIGEST);
   assert.equal(parsedInvite.publicMockSignEnabled, false);
   assert.equal(parsedInvite.signingAvailable, false);
+  assert.deepEqual((state.findFirstArgs as { where: unknown }).where, {
+    OR: [{ inviteTokenHash: hashInviteToken("invite-token") }, { inviteToken: "invite-token" }],
+  });
+});
+
+test("public invite rejects expired tokens before exposing DTO data", async () => {
+  const { service } = createService({
+    SIGNING_PROVIDER: "NCALAYER",
+    NCALAYER_BRIDGE_URL: "http://127.0.0.1:13580",
+  });
+  const record = createInviteRecord();
+  record.inviteTokenExpiresAt = new Date(Date.now() - 60_000);
+
+  (service as any).findPublicInviteRecordByInviteToken = async () => record;
+
+  await assert.rejects(
+    () => service.getPublicInvite("invite-token"),
+    (error) => error instanceof BadRequestException,
+  );
 });
 
 test("public sign schema strips legacy contact fields", () => {
@@ -345,6 +381,7 @@ test("mock signing in NCALayer mode rejects malformed bridge payloads", async ()
           userId: "user-admin-1",
           role: "COMPANY_ADMIN",
           companyId: "company-1",
+          email: "admin@example.com",
           fullName: "Admin User",
         } as never,
         "record-1",
@@ -374,6 +411,7 @@ test("mock signing in NCALayer mode rejects digest mismatches", async () => {
           userId: "user-admin-1",
           role: "COMPANY_ADMIN",
           companyId: "company-1",
+          email: "admin@example.com",
           fullName: "Admin User",
         } as never,
         "record-1",
@@ -397,6 +435,7 @@ test("mock signing in NCALayer mode stores the NCALayer provider payload", async
       userId: "user-admin-1",
       role: "COMPANY_ADMIN",
       companyId: "company-1",
+      email: "admin@example.com",
       fullName: "Admin User",
     } as never,
     "record-1",
@@ -407,6 +446,26 @@ test("mock signing in NCALayer mode stores the NCALayer provider payload", async
   assert.equal((signature.payload as { provider?: string }).provider, "NCALAYER");
   assert.equal(state.signatureCreateCalls, 1);
   assert.equal(state.briefingRecordUpdateCalls, 1);
+});
+
+test("public NCALayer signing rejects signer IIN mismatches", async () => {
+  const { service, state } = createService({
+    SIGNING_PROVIDER: "NCALAYER",
+    NCALAYER_BRIDGE_URL: "http://127.0.0.1:13580",
+  });
+
+  await assert.rejects(
+    () =>
+      service.signPublicInvite(
+        "invite-token",
+        createNcalayerPayload({ signerIin: "000000000000" }) as never,
+      ),
+    (error) => error instanceof BadRequestException,
+  );
+
+  assert.equal(state.employeeUpdateCalls, 0);
+  assert.equal(state.signatureCreateCalls, 0);
+  assert.equal(state.briefingRecordUpdateCalls, 0);
 });
 
 test("public mock signing stays disabled by default and in production", () => {

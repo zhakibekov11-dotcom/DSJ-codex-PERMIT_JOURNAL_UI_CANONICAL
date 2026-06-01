@@ -12,7 +12,7 @@
   "dependencies": {
     "@dsj/types": "workspace:*",
     "@dsj/utils": "workspace:*",
-    "ncalayer-js-client": "^1.5.10",
+    "ncalayer-js-client": "^1.5.12",
     "zod": "^3.24.2"
   }
 }

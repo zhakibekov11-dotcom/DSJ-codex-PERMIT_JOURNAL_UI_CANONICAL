@@ -1,7 +1,12 @@
 import { hash } from "bcryptjs";
 import { createHash } from "node:crypto";
 import { createPrismaClient } from "../src/client";
-import { encryptSensitiveValue, hashSensitiveValue, maskIin } from "../src/security";
+import {
+  encryptSensitiveValue,
+  hashInviteToken,
+  hashSensitiveValue,
+  maskIin,
+} from "../src/security";
 
 const prisma = createPrismaClient();
 
@@ -689,7 +694,7 @@ async function main() {
         employeeStatus: "ASSIGNED",
         documentNumber: "DSJ-2026-0001/01",
         documentHash: hashDocumentPayload("DSJ-2026-0001/01"),
-        inviteToken: "seed-invite-temirlan",
+        inviteTokenHash: hashInviteToken("seed-invite-temirlan"),
         inviteTokenExpiresAt: twoWeeksAhead,
         inviteSentAt: now,
       },
@@ -714,7 +719,7 @@ async function main() {
         employeeStatus: "ASSIGNED",
         documentNumber: "DSJ-2026-0001/02",
         documentHash: hashDocumentPayload("DSJ-2026-0001/02"),
-        inviteToken: "seed-invite-saltanat",
+        inviteTokenHash: hashInviteToken("seed-invite-saltanat"),
         inviteTokenExpiresAt: twoWeeksAhead,
         inviteSentAt: now,
       },

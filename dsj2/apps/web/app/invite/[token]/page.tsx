@@ -4,7 +4,7 @@ import { formatDate, formatDateTime } from "@dsj/utils";
 import { publicInviteSignAction } from "@/actions/public-invite";
 import { SigningForm } from "@/components/signing-form";
 import { apiFetch } from "@/lib/api";
-import { briefingTypeLabels, employeeKindLabels, statusLabels } from "@/lib/labels";
+import { briefingTypeLabels, statusLabels } from "@/lib/labels";
 import { getSigningConfig } from "@/lib/signing-config";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -98,13 +98,6 @@ export default async function PublicInvitePage({
                 <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Участник</p>
                 <p className="mt-2 text-sm font-semibold text-slate-900">{invite.employee.fullName}</p>
                 <p className="mt-1 text-sm text-slate-500">{invite.employee.jobTitle}</p>
-                <p className="mt-1 text-sm text-slate-500">
-                  {invite.employee.employeeNumber} •{" "}
-                  {employeeKindLabels[invite.employee.employeeKind] ?? invite.employee.employeeKind}
-                </p>
-                {invite.employee.contractorCompany?.name ? (
-                  <p className="mt-1 text-sm text-slate-500">{invite.employee.contractorCompany.name}</p>
-                ) : null}
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Инструктаж</p>

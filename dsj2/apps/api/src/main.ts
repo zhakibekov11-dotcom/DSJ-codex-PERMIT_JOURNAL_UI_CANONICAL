@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
+import { validateSecurityConfig } from "./common/utils/security-preflight";
 
 function resolveAppUrl() {
   const trimmed = process.env.APP_URL?.trim();
@@ -21,13 +22,20 @@ function resolveCorsOrigin(appUrl: string) {
   const trimmed = process.env.CORS_ORIGIN?.trim();
 
   if (trimmed) {
-    return trimmed.replace(/\/+$/, "");
+    const origins = trimmed
+      .split(",")
+      .map((origin) => origin.trim().replace(/\/+$/, ""))
+      .filter(Boolean);
+
+    return origins.length === 1 ? origins[0] : origins;
   }
 
   return appUrl;
 }
 
 async function bootstrap() {
+  validateSecurityConfig();
+
   const app = await NestFactory.create(AppModule);
   const port = Number(process.env.PORT ?? 4000);
   const appUrl = resolveAppUrl();

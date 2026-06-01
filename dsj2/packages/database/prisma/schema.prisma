@@ -424,6 +424,7 @@ model BriefingRecord {
   documentNumber   String?
   documentHash     String?
   inviteToken      String?         @unique
+  inviteTokenHash  String?         @unique
   inviteTokenExpiresAt DateTime?
   inviteSentAt     DateTime?
   registrationCompletedAt DateTime?

@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Req } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { optionalPublicSignBriefingSchema, publicSignBriefingSchema } from "@dsj/types";
 import type { Request } from "express";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
@@ -67,12 +68,14 @@ export class SignaturesController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Get("public/briefing-invites/:inviteToken")
   async getPublicInvite(@Param("inviteToken") inviteToken: string) {
     return this.signaturesService.getPublicInvite(inviteToken);
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post("public/briefing-invites/:inviteToken/sign")
   async signPublicInvite(
     @Param("inviteToken") inviteToken: string,
@@ -87,6 +90,7 @@ export class SignaturesController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post("public/briefing-invites/:inviteToken/mock-sign")
   async publicMockSign(
     @Param("inviteToken") inviteToken: string,

@@ -35,78 +35,82 @@ export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async queueUnsignedReminder(input: ReminderInput) {
-    const existingReminder = await this.prisma.reminder.findFirst({
-      where: {
-        companyId: input.companyId,
-        briefingRecordId: input.briefingRecordId,
-        type: input.type,
-        status: {
-          in: ["pending", "sent"],
+    return this.prisma.$transaction(async (transaction) => {
+      const existingReminder = await transaction.reminder.findFirst({
+        where: {
+          companyId: input.companyId,
+          briefingRecordId: input.briefingRecordId,
+          type: input.type,
+          status: {
+            in: ["pending", "sent"],
+          },
         },
-      },
-    });
+      });
 
-    if (existingReminder) {
-      return existingReminder;
-    }
+      if (existingReminder) {
+        return existingReminder;
+      }
 
-    const reminder = await this.prisma.reminder.create({
-      data: {
-        companyId: input.companyId,
-        briefingRecordId: input.briefingRecordId,
-        employeeId: input.employeeId,
-        type: input.type,
-        title: input.title,
-        message: input.message,
-        dueAt: input.dueAt,
-      },
-    });
-
-    await this.prisma.notificationJob.create({
-      data: {
-        companyId: input.companyId,
-        reminderId: reminder.id,
-        briefingRecordId: input.briefingRecordId,
-        assigneeUserId: input.assigneeUserId,
-        channel: "IN_APP",
-        type: input.type,
-        scheduledAt: new Date(),
-        payload: {
+      const reminder = await transaction.reminder.create({
+        data: {
+          companyId: input.companyId,
+          briefingRecordId: input.briefingRecordId,
+          employeeId: input.employeeId,
+          type: input.type,
           title: input.title,
           message: input.message,
+          dueAt: input.dueAt,
         },
-      },
-    });
+      });
 
-    return reminder;
+      await transaction.notificationJob.create({
+        data: {
+          companyId: input.companyId,
+          reminderId: reminder.id,
+          briefingRecordId: input.briefingRecordId,
+          assigneeUserId: input.assigneeUserId,
+          channel: "IN_APP",
+          type: input.type,
+          scheduledAt: new Date(),
+          payload: {
+            title: input.title,
+            message: input.message,
+          },
+        },
+      });
+
+      return reminder;
+    });
   }
 
   async queueSigningInvite(input: SigningInviteInput) {
-    const existingJob = await this.prisma.notificationJob.findFirst({
-      where: {
-        companyId: input.companyId,
-        briefingRecordId: input.briefingRecordId,
-        type: "SIGNING_LINK_INVITE",
-        status: {
-          in: ["queued", "processing", "sent"],
+    return this.prisma.$transaction(async (transaction) => {
+      const existingJob = await transaction.notificationJob.findFirst({
+        where: {
+          companyId: input.companyId,
+          briefingRecordId: input.briefingRecordId,
+          type: "SIGNING_LINK_INVITE",
+          status: {
+            in: ["queued", "processing", "sent"],
+          },
         },
-      },
-    });
+      });
 
-    if (existingJob) {
-      return existingJob;
-    }
+      if (existingJob) {
+        return existingJob;
+      }
 
-    return this.prisma.notificationJob.create({
-      data: {
-        companyId: input.companyId,
-        briefingRecordId: input.briefingRecordId,
-        assigneeUserId: input.assigneeUserId,
-        channel: input.channel,
-        type: "SIGNING_LINK_INVITE",
-        scheduledAt: input.scheduledAt ?? new Date(),
-        payload: input.payload,
-      },
+      return transaction.notificationJob.create({
+        data: {
+          companyId: input.companyId,
+          briefingRecordId: input.briefingRecordId,
+          assigneeUserId: input.assigneeUserId,
+          channel: input.channel,
+          type: "SIGNING_LINK_INVITE",
+          scheduledAt: input.scheduledAt ?? new Date(),
+          payload: input.payload,
+        },
+      });
     });
   }
 

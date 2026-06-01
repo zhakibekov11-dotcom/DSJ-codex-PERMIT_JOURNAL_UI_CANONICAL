@@ -18,6 +18,14 @@ type AuditPayload = {
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private normalizeLimit(limit: number) {
+    if (!Number.isFinite(limit)) {
+      return 30;
+    }
+
+    return Math.min(Math.max(Math.trunc(limit), 1), 100);
+  }
+
   async log(payload: AuditPayload) {
     return this.prisma.auditLog.create({
       data: {
@@ -41,12 +49,20 @@ export class AuditService {
         ...(entityType ? { entityType } : {}),
       },
       include: {
-        actorUser: true,
+        actorUser: {
+          select: {
+            id: true,
+            companyId: true,
+            email: true,
+            fullName: true,
+            role: true,
+          },
+        },
       },
       orderBy: {
         createdAt: "desc",
       },
-      take: limit,
+      take: this.normalizeLimit(limit),
     });
   }
 }

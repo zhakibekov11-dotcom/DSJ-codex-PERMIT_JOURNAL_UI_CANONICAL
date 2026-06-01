@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AuditModule } from "./audit/audit.module";
 import { AuthModule } from "./auth/auth.module";
 import { BiotCardsModule } from "./biot-cards/biot-cards.module";
@@ -35,6 +36,13 @@ import { UsersModule } from "./users/users.module";
       isGlobal: true,
       envFilePath: ["../../.env.local", "../../.env"],
     }),
+    ThrottlerModule.forRoot([
+      {
+        name: "default",
+        ttl: 60_000,
+        limit: 120,
+      },
+    ]),
     PrismaModule,
     AuthModule,
     BiotCardsModule,
@@ -62,6 +70,10 @@ import { UsersModule } from "./users/users.module";
     AuditModule,
   ],
   providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

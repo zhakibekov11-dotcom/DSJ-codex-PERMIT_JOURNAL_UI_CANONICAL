@@ -11,7 +11,7 @@ test("employee instruction page routes signing through the shared signing form",
   assert.notEqual(pageSource.indexOf("getSigningConfig"), -1);
   assert.notEqual(pageSource.indexOf("SigningForm"), -1);
   assert.notEqual(pageSource.indexOf("signMyInstructionAction"), -1);
-  assert.notEqual(pageSource.indexOf("documentHash: string | null"), -1);
+  assert.notEqual(pageSource.indexOf("record.signingDigest"), -1);
   assert.notEqual(pageSource.indexOf("const canSign ="), -1);
   assert.notEqual(pageSource.indexOf("id=\"signing-card\""), -1);
   assert.notEqual(pageSource.indexOf("bridgeContext"), -1);

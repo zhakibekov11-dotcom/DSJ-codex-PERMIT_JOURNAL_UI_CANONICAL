@@ -33,8 +33,19 @@ export class AuthService {
   async login(email: string, password: string) {
     const user = await this.prisma.user.findUnique({
       where: { email: email.toLowerCase() },
-      include: {
-        company: true,
+      select: {
+        id: true,
+        companyId: true,
+        email: true,
+        fullName: true,
+        role: true,
+        passwordHash: true,
+        isActive: true,
+        company: {
+          select: {
+            name: true,
+          },
+        },
       },
     });
 
@@ -81,9 +92,23 @@ export class AuthService {
   async me(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        company: true,
-        department: true,
+      select: {
+        id: true,
+        companyId: true,
+        email: true,
+        fullName: true,
+        role: true,
+        isActive: true,
+        company: {
+          select: {
+            name: true,
+          },
+        },
+        department: {
+          select: {
+            name: true,
+          },
+        },
       },
     });
 

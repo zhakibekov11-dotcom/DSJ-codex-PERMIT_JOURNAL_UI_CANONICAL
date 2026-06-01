@@ -7,7 +7,7 @@ import {
 } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { ConfigService } from "@nestjs/config";
-import { decryptSensitiveValue } from "@dsj/database";
+import { decryptSensitiveValue, hashInviteToken } from "@dsj/database";
 import { resolveSigningRuntimeConfig, type PublicBriefingInvite } from "@dsj/types";
 import { AuditService } from "../audit/audit.service";
 import type { AuthenticatedUser } from "../common/types/authenticated-user.type";
@@ -1006,14 +1006,7 @@ export class SignaturesService {
       signingAvailable,
       employee: {
         fullName: record.employee.fullName,
-        employeeNumber: record.employee.employeeNumber,
         jobTitle: record.employee.jobTitle,
-        employeeKind: record.employee.employeeKind,
-        contractorCompany: record.employee.contractorCompany
-          ? {
-              name: record.employee.contractorCompany.name,
-            }
-          : null,
       },
       instructor: {
         fullName: record.instructor.fullName,
@@ -1146,8 +1139,11 @@ export class SignaturesService {
   }
 
   private async findPublicInviteRecordByInviteToken(_inviteToken: string) {
-    const record = await this.prisma.briefingRecord.findUnique({
-      where: { inviteToken: _inviteToken },
+    const inviteTokenHash = hashInviteToken(_inviteToken);
+    const record = await this.prisma.briefingRecord.findFirst({
+      where: {
+        OR: [{ inviteTokenHash }, { inviteToken: _inviteToken }],
+      },
       select: {
         documentNumber: true,
         briefingType: true,
@@ -1161,14 +1157,7 @@ export class SignaturesService {
         employee: {
           select: {
             fullName: true,
-            employeeNumber: true,
             jobTitle: true,
-            employeeKind: true,
-            contractorCompany: {
-              select: {
-                name: true,
-              },
-            },
           },
         },
         instructor: {
@@ -1192,8 +1181,11 @@ export class SignaturesService {
   }
 
   private async findBriefingRecordByInviteToken(inviteToken: string) {
-    const record = await this.prisma.briefingRecord.findUnique({
-      where: { inviteToken },
+    const inviteTokenHash = hashInviteToken(inviteToken);
+    const record = await this.prisma.briefingRecord.findFirst({
+      where: {
+        OR: [{ inviteTokenHash }, { inviteToken }],
+      },
       select: {
         id: true,
         companyId: true,

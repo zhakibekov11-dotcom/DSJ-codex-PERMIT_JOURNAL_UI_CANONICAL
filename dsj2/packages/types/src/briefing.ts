@@ -338,15 +338,7 @@ export const publicBriefingInviteSchema = z.object({
   signingAvailable: z.boolean(),
   employee: z.object({
     fullName: z.string(),
-    employeeNumber: z.string(),
     jobTitle: z.string(),
-    employeeKind: z.enum(["INTERNAL", "CONTRACTOR"]),
-    contractorCompany: z
-      .object({
-        name: z.string(),
-      })
-      .nullable()
-      .optional(),
   }),
   instructor: z.object({
     fullName: z.string(),

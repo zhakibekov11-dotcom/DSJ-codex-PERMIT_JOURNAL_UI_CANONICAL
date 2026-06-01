@@ -6,75 +6,69 @@ name = "dsj2"
 script = ""
 
 [[actions]]
-name = "Запустить"
-icon = "run"
-command = "npm run"
-
-[[actions]]
-name = "localhost"
+name = "setup"
 icon = "run"
 command = '''
-set -e
-cd dsj2
-
+Set-Location 'C:\Users\Linux\Documents\GitHub\DSJ-v2\DSJ-codex-PERMIT_JOURNAL_UI_CANONICAL\dsj2'
 corepack enable
-pnpm install --frozen-lockfile
-docker compose up -d
-
-export NODE_ENV=development
-export APP_URL=http://localhost:3000/
-export API_URL=http://localhost:4000/
-export DATABASE_URL=postgresql://postgres:postgres@localhost:5433/dsj
-export REDIS_URL=redis://localhost:6379
-export JWT_SECRET=local-dev-jwt-secret-0123456789abcdef
-export JWT_EXPIRES_IN=8h
-export COOKIE_NAME=dsj_session
-export FIELD_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef
-export OPENAI_API_KEY=
-export OPENAI_MODEL=gpt-5-mini
-export ALLOW_PUBLIC_INVITE_MOCK_SIGNING=false
-export SEED_ALLOW_DESTRUCTIVE_RESET=true
-export SEED_SUPER_ADMIN_EMAIL=superadmin@dsj.kz
-export SEED_SUPER_ADMIN_PASSWORD=DemoPass123!
-export SEED_COMPANY_ADMIN_EMAIL=admin@alatau-industrial.kz
-export SEED_COMPANY_ADMIN_PASSWORD=DemoPass123!
-
-pnpm db:generate
-pnpm db:deploy
-pnpm db:seed
-pnpm dev
+corepack pnpm install --frozen-lockfile
+corepack pnpm db:generate
 '''
 
 [[actions]]
-name = "lh"
+name = "dev"
 icon = "run"
 command = '''
-set -e
-
-corepack enable
-pnpm install --frozen-lockfile
+Set-Location 'C:\Users\Linux\Documents\GitHub\DSJ-v2\DSJ-codex-PERMIT_JOURNAL_UI_CANONICAL\dsj2'
+$env:NODE_ENV='development'
+$env:APP_URL='http://localhost:3000'
+$env:API_URL='http://localhost:4000'
+$env:DATABASE_URL='postgresql://postgres:postgres@localhost:5433/dsj'
+$env:REDIS_URL='redis://localhost:6379'
+$env:JWT_SECRET='local-dev-jwt-secret-0123456789abcdef'
+$env:JWT_EXPIRES_IN='8h'
+$env:COOKIE_NAME='dsj_session'
+$env:FIELD_ENCRYPTION_KEY='0123456789abcdef0123456789abcdef'
+$env:SIGNING_PROVIDER='MOCK_NCALAYER'
+$env:NCALAYER_BRIDGE_URL='http://127.0.0.1:13580'
+$env:NCALAYER_BRIDGE_TIMEOUT_MS='15000'
+$env:SIGNING_TEST_MODE='true'
+$env:ALLOW_PUBLIC_INVITE_MOCK_SIGNING='false'
 docker compose up -d
+corepack pnpm dev
+'''
 
-export NODE_ENV=development
-export APP_URL=http://localhost:3000/
-export API_URL=http://localhost:4000/
-export DATABASE_URL=postgresql://postgres:postgres@localhost:5433/dsj
-export REDIS_URL=redis://localhost:6379
-export JWT_SECRET=local-dev-jwt-secret-0123456789abcdef
-export JWT_EXPIRES_IN=8h
-export COOKIE_NAME=dsj_session
-export FIELD_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef
-export OPENAI_API_KEY=
-export OPENAI_MODEL=gpt-5-mini
-export ALLOW_PUBLIC_INVITE_MOCK_SIGNING=false
-export SEED_ALLOW_DESTRUCTIVE_RESET=true
-export SEED_SUPER_ADMIN_EMAIL=superadmin@dsj.kz
-export SEED_SUPER_ADMIN_PASSWORD=DemoPass123!
-export SEED_COMPANY_ADMIN_EMAIL=admin@alatau-industrial.kz
-export SEED_COMPANY_ADMIN_PASSWORD=DemoPass123!
+[[actions]]
+name = "verify"
+icon = "run"
+command = '''
+Set-Location 'C:\Users\Linux\Documents\GitHub\DSJ-v2\DSJ-codex-PERMIT_JOURNAL_UI_CANONICAL\dsj2'
+$env:APP_URL='http://localhost:3000'
+$env:API_URL='http://localhost:4000'
+corepack pnpm verify
+'''
 
-pnpm db:generate
-pnpm db:deploy
-pnpm db:seed
-pnpm dev
+[[actions]]
+name = "reset-demo-seed"
+icon = "run"
+command = '''
+Set-Location 'C:\Users\Linux\Documents\GitHub\DSJ-v2\DSJ-codex-PERMIT_JOURNAL_UI_CANONICAL\dsj2'
+$env:NODE_ENV='development'
+$env:APP_URL='http://localhost:3000'
+$env:API_URL='http://localhost:4000'
+$env:DATABASE_URL='postgresql://postgres:postgres@localhost:5433/dsj'
+$env:REDIS_URL='redis://localhost:6379'
+$env:JWT_SECRET='local-dev-jwt-secret-0123456789abcdef'
+$env:JWT_EXPIRES_IN='8h'
+$env:COOKIE_NAME='dsj_session'
+$env:FIELD_ENCRYPTION_KEY='0123456789abcdef0123456789abcdef'
+$env:SEED_ALLOW_DESTRUCTIVE_RESET='true'
+$env:SEED_SUPER_ADMIN_EMAIL='superadmin@dsj.kz'
+$env:SEED_SUPER_ADMIN_PASSWORD='DemoPass123!'
+$env:SEED_COMPANY_ADMIN_EMAIL='admin@alatau-industrial.kz'
+$env:SEED_COMPANY_ADMIN_PASSWORD='DemoPass123!'
+docker compose up -d
+corepack pnpm db:generate
+corepack pnpm db:deploy
+corepack pnpm db:seed
 '''

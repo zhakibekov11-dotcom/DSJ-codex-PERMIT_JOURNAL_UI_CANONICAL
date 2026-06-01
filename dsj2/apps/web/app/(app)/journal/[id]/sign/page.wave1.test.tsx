@@ -11,7 +11,7 @@ test("journal sign page uses the shared signing form and provider config", async
   assert.notEqual(pageSource.indexOf("getSigningConfig"), -1);
   assert.notEqual(pageSource.indexOf("SigningForm"), -1);
   assert.notEqual(pageSource.indexOf("signBriefingAction"), -1);
-  assert.notEqual(pageSource.indexOf("documentHash: string | null"), -1);
+  assert.notEqual(pageSource.indexOf("record.signingDigest"), -1);
   assert.notEqual(pageSource.indexOf("bridgeContext"), -1);
   assert.notEqual(pageSource.indexOf("session.user.fullName"), -1);
   assert.notEqual(pageSource.indexOf("signingConfig.isConfigured"), -1);

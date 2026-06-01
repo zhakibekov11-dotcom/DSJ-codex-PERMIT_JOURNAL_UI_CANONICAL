@@ -122,10 +122,14 @@ Run commands from the `dsj2` root.
 corepack enable && pnpm install --frozen-lockfile
 pnpm dev
 pnpm build
+pnpm build:local
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm verify
+pnpm verify:fast
+pnpm agent:doctor
+pnpm tenant:audit
 pnpm db:generate
 pnpm db:migrate
 pnpm db:deploy
@@ -136,9 +140,11 @@ pnpm build:worker:deploy
 
 Current validation reality:
 
-- `pnpm verify` is the current compile/build gate and runs database generation, typecheck, and build.
-- Root `pnpm lint` and `pnpm test` intentionally fail with placeholder messages because package-level lint/test tasks are not configured yet.
-- For narrow changes, prefer the touched package build/typecheck plus a targeted smoke check.
+- `pnpm verify` is the current CI-equivalent gate and runs the agent workflow audit, Prisma generation, typecheck, local build, and package tests.
+- `pnpm verify:fast` is the preferred Codex iteration gate for narrow changes.
+- `pnpm build` keeps production `API_URL` validation strict; use `pnpm build:local` for local verification with default local URLs.
+- `pnpm test` runs the package test suites through Turbo.
+- Root `pnpm lint` is still intentionally blocked until a real ESLint/format policy is configured.
 
 ## Source Of Truth
 

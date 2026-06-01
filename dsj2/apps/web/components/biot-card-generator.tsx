@@ -65,22 +65,26 @@ type BiotCardGeneratorProps = {
 
 type TrainingSubjectMode = "preset" | "custom";
 
-type RowDocumentSettings = {
+type TrainingSubjectSettings = {
+  trainingSubjectMode: TrainingSubjectMode;
+  trainingSubjectPreset: string;
+  trainingSubjectCustom: string;
+};
+
+type RowDocumentSettings = TrainingSubjectSettings & {
   selectedCertificateTypes: SafetyCardType[];
   certificateType: SafetyCardType;
   biotDocumentKind: BiotDocumentKind;
   psDocumentKind: BiotDocumentKind;
   issueDate: string;
   seriesNumber: string;
-  trainingSubjectMode: TrainingSubjectMode;
-  trainingSubjectPreset: string;
-  trainingSubjectCustom: string;
   psIncludeCard: boolean;
   psIncludeProtocol: boolean;
   psIncludeWitness: boolean;
 };
 
-type RowDocumentNumberSettings = {
+type RowDocumentNumberSettings = TrainingSubjectSettings & {
+  issueDate: string;
   certificateNumber: string;
   protocolNumber: string;
   witnessCertificateNumber: string;
@@ -402,10 +406,18 @@ function getRowDocumentKindForType(
   );
 }
 
-function getRowEffectiveTrainingSubject(row: RowDocumentSettings) {
-  return row.trainingSubjectMode === "custom"
-    ? row.trainingSubjectCustom.trim()
-    : row.trainingSubjectPreset;
+function getDefaultsCacheKey(
+  certificateType: SafetyCardType,
+  biotDocumentKind: BiotDocumentKind,
+  issueDate: string,
+) {
+  return `${certificateType}:${biotDocumentKind}:${issueDate}`;
+}
+
+function getEffectiveTrainingSubject(settings: TrainingSubjectSettings) {
+  return settings.trainingSubjectMode === "custom"
+    ? settings.trainingSubjectCustom.trim()
+    : settings.trainingSubjectPreset;
 }
 
 function createRowDocumentSettings(args: {
@@ -454,8 +466,17 @@ function createEmptyDocumentNumberSettings(
   index: number,
   defaults: BiotCardDefaults,
   includeWitness: boolean,
+  trainingSubjectSettings?: TrainingSubjectSettings,
 ): RowDocumentNumberSettings {
+  const subjectSettings = trainingSubjectSettings ?? {
+    trainingSubjectMode: "preset" as const,
+    trainingSubjectPreset: defaults.defaultTrainingSubject,
+    trainingSubjectCustom: "",
+  };
+
   return {
+    ...subjectSettings,
+    issueDate,
     certificateNumber: formatCertificateNumber(
       certificateType,
       issueDate,
@@ -1019,6 +1040,12 @@ function createEmptyRow(
   const rowPsIncludeWitness =
     rowSettings?.psIncludeWitness ??
     (rowCertificateType === "PS" ? includeWitness : false);
+  const rowTrainingSubjectSettings: TrainingSubjectSettings = {
+    trainingSubjectMode: rowSettings?.trainingSubjectMode ?? "preset",
+    trainingSubjectPreset:
+      rowSettings?.trainingSubjectPreset ?? defaults.defaultTrainingSubject,
+    trainingSubjectCustom: rowSettings?.trainingSubjectCustom ?? "",
+  };
   const primaryNumberSettings = createEmptyDocumentNumberSettings(
     rowCertificateType,
     rowPrimaryDocumentKind,
@@ -1026,6 +1053,7 @@ function createEmptyRow(
     index,
     defaults,
     rowPsIncludeWitness,
+    rowTrainingSubjectSettings,
   );
 
   return {
@@ -1036,10 +1064,7 @@ function createEmptyRow(
       psDocumentKind: rowPsDocumentKind,
       issueDate: rowIssueDate,
       seriesNumber: rowSettings?.seriesNumber ?? "1",
-      trainingSubjectMode: rowSettings?.trainingSubjectMode ?? "preset",
-      trainingSubjectPreset:
-        rowSettings?.trainingSubjectPreset ?? defaults.defaultTrainingSubject,
-      trainingSubjectCustom: rowSettings?.trainingSubjectCustom ?? "",
+      ...rowTrainingSubjectSettings,
       psIncludeCard: rowSettings?.psIncludeCard ?? true,
       psIncludeProtocol: rowSettings?.psIncludeProtocol ?? true,
       psIncludeWitness: rowPsIncludeWitness,
@@ -1057,8 +1082,7 @@ function createEmptyRow(
     certificateNumber: primaryNumberSettings.certificateNumber,
     protocolNumber: primaryNumberSettings.protocolNumber,
     witnessCertificateNumber: primaryNumberSettings.witnessCertificateNumber,
-    witnessRegistrationNumber:
-      primaryNumberSettings.witnessRegistrationNumber,
+    witnessRegistrationNumber: primaryNumberSettings.witnessRegistrationNumber,
     isCertificateManual: primaryNumberSettings.isCertificateManual,
     isProtocolManual: primaryNumberSettings.isProtocolManual,
     isWitnessCertificateManual:
@@ -1079,6 +1103,10 @@ function createRowFromRequestItem(
   rowSettings: RowDocumentSettings,
 ): GeneratorRow {
   const itemNumbers: RowDocumentNumberSettings = {
+    issueDate: rowSettings.issueDate,
+    trainingSubjectMode: rowSettings.trainingSubjectMode,
+    trainingSubjectPreset: rowSettings.trainingSubjectPreset,
+    trainingSubjectCustom: rowSettings.trainingSubjectCustom,
     certificateNumber: item.certificateNumber,
     protocolNumber: item.protocolNumber,
     witnessCertificateNumber: item.witnessCertificateNumber ?? "",
@@ -1210,6 +1238,15 @@ export function BiotCardGenerator({
     initialRequest?.seriesNumber ?? "1",
   );
   const [defaults, setDefaults] = useState(initialDefaults);
+  const [typeDefaultsCache, setTypeDefaultsCache] = useState<
+    Record<string, BiotCardDefaults>
+  >({
+    [getDefaultsCacheKey(
+      initialCertificateType,
+      initialActiveDocumentKind,
+      initialIssueDate,
+    )]: initialDefaults,
+  });
   const [trainingSubjectMode, setTrainingSubjectMode] =
     useState<TrainingSubjectMode>(initialTrainingSubjectMode);
   const [trainingSubjectPreset, setTrainingSubjectPreset] = useState(
@@ -1264,10 +1301,11 @@ export function BiotCardGenerator({
   const [activeRowSettingsEditor, setActiveRowSettingsEditor] =
     useState<ActiveRowSettingsEditor>(null);
 
-  const effectiveTrainingSubject =
-    trainingSubjectMode === "custom"
-      ? trainingSubjectCustom.trim()
-      : trainingSubjectPreset;
+  const effectiveTrainingSubject = getEffectiveTrainingSubject({
+    trainingSubjectMode,
+    trainingSubjectPreset,
+    trainingSubjectCustom,
+  });
   const isMultiTypeSelection = selectedCertificateTypes.length > 1;
   const hasRoleSelection = selectedCertificateTypes.some(
     (type) => type !== "PS",
@@ -1487,11 +1525,24 @@ export function BiotCardGenerator({
     const savedNumbers = row.documentNumbers[type];
 
     if (savedNumbers) {
-      return savedNumbers;
+      return {
+        ...savedNumbers,
+        issueDate: savedNumbers.issueDate || row.issueDate,
+        trainingSubjectMode:
+          savedNumbers.trainingSubjectMode || row.trainingSubjectMode,
+        trainingSubjectPreset:
+          savedNumbers.trainingSubjectPreset || row.trainingSubjectPreset,
+        trainingSubjectCustom:
+          savedNumbers.trainingSubjectCustom ?? row.trainingSubjectCustom,
+      };
     }
 
     if (type === row.certificateType) {
       return {
+        issueDate: row.issueDate,
+        trainingSubjectMode: row.trainingSubjectMode,
+        trainingSubjectPreset: row.trainingSubjectPreset,
+        trainingSubjectCustom: row.trainingSubjectCustom,
         certificateNumber: row.certificateNumber,
         protocolNumber: row.protocolNumber,
         witnessCertificateNumber: row.witnessCertificateNumber,
@@ -1512,16 +1563,51 @@ export function BiotCardGenerator({
       type === "PS" &&
         row.psDocumentKind !== "ITR_CERTIFICATE" &&
         row.psIncludeWitness,
+      {
+        trainingSubjectMode: row.trainingSubjectMode,
+        trainingSubjectPreset: typeDefaults.defaultTrainingSubject,
+        trainingSubjectCustom:
+          row.trainingSubjectMode === "custom" ? row.trainingSubjectCustom : "",
+      },
     );
+  }
+
+  function getRowTypeIssueDate(
+    row: GeneratorRow,
+    type: SafetyCardType,
+    index = rows.findIndex((item) => item.id === row.id),
+    typeDefaults: BiotCardDefaults = defaults,
+  ) {
+    return (
+      getRowDocumentNumberState(row, type, index, typeDefaults).issueDate ||
+      row.issueDate
+    );
+  }
+
+  function getRowTypeTrainingSubject(
+    row: GeneratorRow,
+    type: SafetyCardType,
+    index = rows.findIndex((item) => item.id === row.id),
+    typeDefaults: BiotCardDefaults = defaults,
+  ) {
+    const numbers = getRowDocumentNumberState(row, type, index, typeDefaults);
+
+    if (numbers.trainingSubjectMode === "custom") {
+      return numbers.trainingSubjectCustom.trim();
+    }
+
+    return typeDefaults.trainingSubjectPresets.includes(
+      numbers.trainingSubjectPreset,
+    )
+      ? numbers.trainingSubjectPreset
+      : typeDefaults.defaultTrainingSubject;
   }
 
   function withUpdatedRowDocumentNumberState(
     row: GeneratorRow,
     type: SafetyCardType,
     index: number,
-    updater: (
-      current: RowDocumentNumberSettings,
-    ) => RowDocumentNumberSettings,
+    updater: (current: RowDocumentNumberSettings) => RowDocumentNumberSettings,
   ): GeneratorRow {
     const nextNumbers = updater(getRowDocumentNumberState(row, type, index));
     const nextDocumentNumbers = {
@@ -1538,6 +1624,10 @@ export function BiotCardGenerator({
 
     return {
       ...row,
+      issueDate: nextNumbers.issueDate,
+      trainingSubjectMode: nextNumbers.trainingSubjectMode,
+      trainingSubjectPreset: nextNumbers.trainingSubjectPreset,
+      trainingSubjectCustom: nextNumbers.trainingSubjectCustom,
       certificateNumber: nextNumbers.certificateNumber,
       protocolNumber: nextNumbers.protocolNumber,
       witnessCertificateNumber: nextNumbers.witnessCertificateNumber,
@@ -1581,8 +1671,13 @@ export function BiotCardGenerator({
       primaryType === "PS" &&
         baseRow.psDocumentKind !== "ITR_CERTIFICATE" &&
         baseRow.psIncludeWitness,
+      primaryNumbers,
     );
     const mergedPrimaryNumbers: RowDocumentNumberSettings = {
+      issueDate: baseRow.issueDate,
+      trainingSubjectMode: primaryNumbers.trainingSubjectMode,
+      trainingSubjectPreset: primaryNumbers.trainingSubjectPreset,
+      trainingSubjectCustom: primaryNumbers.trainingSubjectCustom,
       certificateNumber: primaryNumbers.isCertificateManual
         ? primaryNumbers.certificateNumber
         : nextPrimaryNumbers.certificateNumber,
@@ -1616,8 +1711,7 @@ export function BiotCardGenerator({
       certificateNumber: mergedPrimaryNumbers.certificateNumber,
       protocolNumber: mergedPrimaryNumbers.protocolNumber,
       witnessCertificateNumber: mergedPrimaryNumbers.witnessCertificateNumber,
-      witnessRegistrationNumber:
-        mergedPrimaryNumbers.witnessRegistrationNumber,
+      witnessRegistrationNumber: mergedPrimaryNumbers.witnessRegistrationNumber,
       isCertificateManual: mergedPrimaryNumbers.isCertificateManual,
       isProtocolManual: mergedPrimaryNumbers.isProtocolManual,
       isWitnessCertificateManual:
@@ -1642,8 +1736,51 @@ export function BiotCardGenerator({
     );
   }
 
+  function getCachedDefaultsForType(
+    type: SafetyCardType,
+    typeIssueDate: string,
+    typeDocumentKind: BiotDocumentKind,
+  ) {
+    return (
+      typeDefaultsCache[
+        getDefaultsCacheKey(type, typeDocumentKind, typeIssueDate)
+      ] ?? defaults
+    );
+  }
+
+  function primeRowTypeDefaults(row: GeneratorRow) {
+    const rowIndex = rows.findIndex((item) => item.id === row.id);
+
+    getRowSelectedTypes(row).forEach((type) => {
+      const typeDocumentKind = getRowDocumentKindForType(row, type);
+      const typeIssueDate = getRowTypeIssueDate(
+        row,
+        type,
+        rowIndex,
+        getCachedDefaultsForType(type, row.issueDate, typeDocumentKind),
+      );
+      const cacheKey = getDefaultsCacheKey(
+        type,
+        typeDocumentKind,
+        typeIssueDate,
+      );
+
+      if (typeDefaultsCache[cacheKey]) {
+        return;
+      }
+
+      void fetchDefaultsForType(type, typeIssueDate, typeDocumentKind).catch(
+        () => undefined,
+      );
+    });
+  }
+
   function openRowSettings(rowId: string) {
-    setActiveCellEditor(null);
+    const row = rows.find((item) => item.id === rowId);
+    if (row) {
+      primeRowTypeDefaults(row);
+    }
+
     setActiveRowSettingsEditor(rowId);
   }
 
@@ -1733,7 +1870,14 @@ export function BiotCardGenerator({
       throw new Error(message);
     }
 
-    return (await response.json()) as BiotCardDefaults;
+    const nextDefaults = (await response.json()) as BiotCardDefaults;
+    setTypeDefaultsCache((current) => ({
+      ...current,
+      [getDefaultsCacheKey(nextType, nextBiotDocumentKind, nextIssueDate)]:
+        nextDefaults,
+    }));
+
+    return nextDefaults;
   }
 
   async function loadRequests() {
@@ -1898,9 +2042,7 @@ export function BiotCardGenerator({
           trainingSubjectMode,
           trainingSubjectPreset:
             trainingSubjectMode === "preset" &&
-            nextDefaults.trainingSubjectPresets.includes(
-              trainingSubjectPreset,
-            )
+            nextDefaults.trainingSubjectPresets.includes(trainingSubjectPreset)
               ? trainingSubjectPreset
               : nextDefaults.defaultTrainingSubject,
           trainingSubjectCustom,
@@ -1959,20 +2101,19 @@ export function BiotCardGenerator({
   ]);
 
   useEffect(() => {
-    if (!activeCellEditor && !activeRowSettingsEditor) {
+    if (!activeRowSettingsEditor) {
       return;
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setActiveCellEditor(null);
         setActiveRowSettingsEditor(null);
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeCellEditor, activeRowSettingsEditor]);
+  }, [activeRowSettingsEditor]);
 
   function updateRow(
     rowId: string,
@@ -1981,10 +2122,6 @@ export function BiotCardGenerator({
     setRows((current) =>
       current.map((row) => (row.id === rowId ? updater(row) : row)),
     );
-  }
-
-  function openCellEditor(rowId: string, field: EditableCellKey) {
-    setActiveCellEditor({ rowId, field });
   }
 
   function getEditableCellValue(row: GeneratorRow, field: EditableCellKey) {
@@ -2188,23 +2325,74 @@ export function BiotCardGenerator({
         : value.trim();
     const cellPlaceholder = placeholder ?? getEditableCellPlaceholder(field);
 
+    if (field === "photo") {
+      return (
+        <div className="space-y-2 px-2 py-2">
+          <PhotoUploadInput
+            inputClassName={cn(requestSpreadsheetFileClass, "px-1 py-1")}
+            pasteAreaClassName="rounded-md border border-dashed border-[var(--line)] bg-transparent px-2.5 py-2 text-xs leading-5 text-[var(--muted)] outline-none transition-colors duration-150 hover:bg-[var(--surface-muted)] focus:border-[var(--focus-border)] focus:ring-2 focus:ring-[var(--focus-ring)]"
+            pasteHint={displayValue || cellPlaceholder}
+            onFileSelected={(file) => handlePhotoPasteTarget(row.id, file)}
+          />
+          {row.photoFileName ? (
+            <div className="flex items-center justify-between gap-2 rounded-md bg-[var(--surface-muted)] px-2.5 py-1.5 text-xs text-[var(--muted)]">
+              <span className="truncate">{row.photoFileName}</span>
+              <button
+                type="button"
+                className="shrink-0 font-medium text-[var(--ink)]"
+                onClick={() =>
+                  updateRow(row.id, (current) => ({
+                    ...current,
+                    photoDataUrl: "",
+                    photoFileName: "",
+                    isPhotoProcessing: false,
+                  }))
+                }
+              >
+                Очистить
+              </button>
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
     return (
-      <button
-        type="button"
-        className={cn(
-          "block min-h-10 w-full px-3.5 py-2.5 text-left text-sm leading-5 outline-none transition-colors duration-150 hover:bg-[var(--surface-muted)] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--focus-ring)]",
-          displayValue ? "text-[var(--ink)]" : "text-slate-400",
-        )}
-        onClick={() => openCellEditor(row.id, field)}
-        onPaste={
-          field !== "photo"
-            ? (event) =>
-                handleCellPaste(row.id, field as BulkPasteColumnKey, event)
-            : undefined
-        }
-      >
-        {displayValue || cellPlaceholder}
-      </button>
+      <div className="min-h-10" data-filled={displayValue ? "true" : "false"}>
+        <Input
+          className={requestSpreadsheetInputClass}
+          value={value}
+          aria-label={getEditableCellLabel(field)}
+          placeholder={cellPlaceholder}
+          onChange={(event: ChangeEvent<HTMLInputElement>) =>
+            updateCellEditorValue(row.id, field, event.target.value)
+          }
+          onPaste={(event) =>
+            handleCellPaste(row.id, field as BulkPasteColumnKey, event)
+          }
+        />
+        {field === "positionKz" ? (
+          <div className="flex flex-wrap items-center gap-2 px-3.5 pb-2">
+            <button
+              type="button"
+              className={translateActionButtonClass}
+              disabled={
+                !row.positionRu.trim() || Boolean(translatingRowIds[row.id])
+              }
+              onClick={() =>
+                void handleTranslatePosition(row.id, row.positionRu)
+              }
+            >
+              {translatingRowIds[row.id] ? "Перевод..." : "Перевести в KZ"}
+            </button>
+            {rowTranslationErrors[row.id] ? (
+              <p className="text-xs text-rose-600">
+                {rowTranslationErrors[row.id]}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     );
   }
 
@@ -2219,10 +2407,7 @@ export function BiotCardGenerator({
     const hasRowRoleSelection = selectedTypes.some((type) => type !== "PS");
     const hasRowPsSelection = selectedTypes.includes("PS");
     const rowTrainingSubjectTypes = selectedTypes.filter((type) =>
-      usesTrainingSubject(
-        type,
-        getRowDocumentKindForType(settingsRow, type),
-      ),
+      usesTrainingSubject(type, getRowDocumentKindForType(settingsRow, type)),
     );
     const rowTrainingSubjectLabel =
       rowTrainingSubjectTypes.length === 1
@@ -2251,14 +2436,90 @@ export function BiotCardGenerator({
       );
     }
 
+    function updateActiveRowTypeIssueDate(type: SafetyCardType, value: string) {
+      setRows((current) =>
+        current.map((row, index) => {
+          if (row.id !== settingsRow.id) {
+            return row;
+          }
+
+          return withUpdatedRowDocumentNumberState(
+            row,
+            type,
+            index,
+            (numbers) => {
+              const typeDocumentKind = getRowDocumentKindForType(row, type);
+              const nextAutoNumbers = createEmptyDocumentNumberSettings(
+                type,
+                typeDocumentKind,
+                value,
+                index,
+                getCachedDefaultsForType(type, value, typeDocumentKind),
+                type === "PS" &&
+                  typeDocumentKind !== "ITR_CERTIFICATE" &&
+                  row.psIncludeWitness,
+                numbers,
+              );
+
+              return {
+                ...numbers,
+                issueDate: value,
+                certificateNumber: numbers.isCertificateManual
+                  ? numbers.certificateNumber
+                  : nextAutoNumbers.certificateNumber,
+                protocolNumber: numbers.isProtocolManual
+                  ? numbers.protocolNumber
+                  : nextAutoNumbers.protocolNumber,
+                witnessCertificateNumber: numbers.isWitnessCertificateManual
+                  ? numbers.witnessCertificateNumber
+                  : nextAutoNumbers.witnessCertificateNumber,
+                witnessRegistrationNumber: numbers.isWitnessRegistrationManual
+                  ? numbers.witnessRegistrationNumber
+                  : nextAutoNumbers.witnessRegistrationNumber,
+              };
+            },
+          );
+        }),
+      );
+
+      void fetchDefaultsForType(
+        type,
+        value,
+        getRowDocumentKindForType(settingsRow, type),
+      ).catch(() => undefined);
+      setErrorMessage(null);
+      setSuccessMessage(null);
+    }
+
     function renderNumberInputs(type: SafetyCardType) {
       const typeDocumentKind = getRowDocumentKindForType(settingsRow, type);
-      const numbers = getRowDocumentNumberState(
+      const fallbackNumbers = getRowDocumentNumberState(
         settingsRow,
         type,
         Math.max(rowIndex, 0),
       );
+      const typeDefaults = getCachedDefaultsForType(
+        type,
+        fallbackNumbers.issueDate || settingsRow.issueDate,
+        typeDocumentKind,
+      );
+      const numbers = getRowDocumentNumberState(
+        settingsRow,
+        type,
+        Math.max(rowIndex, 0),
+        typeDefaults,
+      );
       const usesTypeProtocol = usesProtocolNumber(type, typeDocumentKind);
+      const usesTypeTrainingSubject = usesTrainingSubject(
+        type,
+        typeDocumentKind,
+      );
+      const trainingSubjectPreset =
+        typeDefaults.trainingSubjectPresets.includes(
+          numbers.trainingSubjectPreset,
+        )
+          ? numbers.trainingSubjectPreset
+          : typeDefaults.defaultTrainingSubject;
       const usesTypeWitness =
         type === "PS" &&
         typeDocumentKind !== "ITR_CERTIFICATE" &&
@@ -2274,6 +2535,90 @@ export function BiotCardGenerator({
               {getCertificateTypeLabel(type, typeDocumentKind)}
             </p>
           ) : null}
+          <div className="mb-3 grid gap-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-[var(--ink)]">
+                Дата выдачи
+              </label>
+              <Input
+                type="date"
+                className="h-9"
+                value={numbers.issueDate}
+                disabled={isEditMode}
+                onInput={(event) =>
+                  updateActiveRowTypeIssueDate(type, event.currentTarget.value)
+                }
+                onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                  updateActiveRowTypeIssueDate(type, event.target.value)
+                }
+              />
+            </div>
+
+            {usesTypeTrainingSubject ? (
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-[var(--ink)]">
+                  {getTrainingSubjectLabel(type)}
+                </label>
+                <Select
+                  className="h-9"
+                  value={
+                    numbers.trainingSubjectMode === "custom"
+                      ? CUSTOM_SUBJECT_VALUE
+                      : trainingSubjectPreset
+                  }
+                  disabled={isEditMode}
+                  onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                    updateActiveRowDocumentNumbers(type, (current) =>
+                      event.target.value === CUSTOM_SUBJECT_VALUE
+                        ? {
+                            ...current,
+                            trainingSubjectMode: "custom",
+                          }
+                        : {
+                            ...current,
+                            trainingSubjectMode: "preset",
+                            trainingSubjectPreset: event.target.value,
+                          },
+                    )
+                  }
+                >
+                  {typeDefaults.trainingSubjectPresets.map((preset) => (
+                    <option key={preset} value={preset}>
+                      {preset}
+                    </option>
+                  ))}
+                  <option value={CUSTOM_SUBJECT_VALUE}>Свое значение</option>
+                </Select>
+              </div>
+            ) : null}
+
+            {usesTypeTrainingSubject ? (
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-sm font-medium text-[var(--ink)]">
+                  Собственное значение
+                </label>
+                <Input
+                  className={cn(
+                    "h-9",
+                    numbers.trainingSubjectMode !== "custom"
+                      ? "bg-[var(--surface-muted)] text-[var(--muted)]"
+                      : "",
+                  )}
+                  value={numbers.trainingSubjectCustom}
+                  disabled={
+                    isEditMode || numbers.trainingSubjectMode !== "custom"
+                  }
+                  placeholder={typeDefaults.defaultTrainingSubject}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                    updateActiveRowDocumentNumbers(type, (current) => ({
+                      ...current,
+                      trainingSubjectCustom: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+            ) : null}
+          </div>
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1">
               <label className="text-sm font-medium text-[var(--ink)]">
@@ -2451,6 +2796,17 @@ export function BiotCardGenerator({
                             selectedCertificateTypes: normalizedTypes,
                             certificateType: nextPrimaryType,
                           }));
+
+                          if (!checked) {
+                            void fetchDefaultsForType(
+                              type,
+                              activeSettingsRow.issueDate,
+                              getRowDocumentKindForType(
+                                activeSettingsRow,
+                                type,
+                              ),
+                            ).catch(() => undefined);
+                          }
                         }}
                       />
                     </label>
@@ -2507,34 +2863,34 @@ export function BiotCardGenerator({
                   Категория удостоверения
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {(["WORKER_CARD", "ITR_CERTIFICATE"] as BiotDocumentKind[]).map(
-                    (kind) => (
-                      <button
-                        key={kind}
-                        type="button"
-                        disabled={isEditMode}
-                        className={cn(
-                          "rounded-lg border px-3.5 py-3 text-left transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60",
-                          activeSettingsRow.biotDocumentKind === kind
-                            ? "border-[var(--surface-strong)] bg-[var(--surface-strong)] text-white"
-                            : "border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--surface-muted)]",
-                        )}
-                        onClick={() =>
-                          updateActiveRowSettings((row) => ({
-                            ...row,
-                            biotDocumentKind: kind,
-                          }))
-                        }
-                      >
-                        <span className="block text-sm font-semibold">
-                          {getDocumentCategoryLabel(kind)}
-                        </span>
-                        <span className="mt-1 block text-xs opacity-80">
-                          Срок действия {formatValidityLabel(kind)}.
-                        </span>
-                      </button>
-                    ),
-                  )}
+                  {(
+                    ["WORKER_CARD", "ITR_CERTIFICATE"] as BiotDocumentKind[]
+                  ).map((kind) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      disabled={isEditMode}
+                      className={cn(
+                        "rounded-lg border px-3.5 py-3 text-left transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60",
+                        activeSettingsRow.biotDocumentKind === kind
+                          ? "border-[var(--surface-strong)] bg-[var(--surface-strong)] text-white"
+                          : "border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--surface-muted)]",
+                      )}
+                      onClick={() =>
+                        updateActiveRowSettings((row) => ({
+                          ...row,
+                          biotDocumentKind: kind,
+                        }))
+                      }
+                    >
+                      <span className="block text-sm font-semibold">
+                        {getDocumentCategoryLabel(kind)}
+                      </span>
+                      <span className="mt-1 block text-xs opacity-80">
+                        Срок действия {formatValidityLabel(kind)}.
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </section>
             ) : null}
@@ -2545,38 +2901,38 @@ export function BiotCardGenerator({
                   ПС-комплект
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {(["WORKER_CARD", "ITR_CERTIFICATE"] as BiotDocumentKind[]).map(
-                    (kind) => (
-                      <button
-                        key={kind}
-                        type="button"
-                        disabled={isEditMode}
-                        className={cn(
-                          "rounded-lg border px-3.5 py-3 text-left transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60",
-                          activeSettingsRow.psDocumentKind === kind
-                            ? "border-[var(--surface-strong)] bg-[var(--surface-strong)] text-white"
-                            : "border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--surface-muted)]",
-                        )}
-                        onClick={() =>
-                          updateActiveRowSettings((row) => ({
-                            ...row,
-                            psDocumentKind: kind,
-                          }))
-                        }
-                      >
-                        <span className="block text-sm font-semibold">
-                          {kind === "ITR_CERTIFICATE"
-                            ? "Свидетельство"
-                            : "Корочка / протокол / свидетельство"}
-                        </span>
-                        <span className="mt-1 block text-xs opacity-80">
-                          {kind === "ITR_CERTIFICATE"
-                            ? "Legacy-режим ПС без комплекта."
-                            : "Можно выбрать нужные документы комплекта."}
-                        </span>
-                      </button>
-                    ),
-                  )}
+                  {(
+                    ["WORKER_CARD", "ITR_CERTIFICATE"] as BiotDocumentKind[]
+                  ).map((kind) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      disabled={isEditMode}
+                      className={cn(
+                        "rounded-lg border px-3.5 py-3 text-left transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60",
+                        activeSettingsRow.psDocumentKind === kind
+                          ? "border-[var(--surface-strong)] bg-[var(--surface-strong)] text-white"
+                          : "border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--surface-muted)]",
+                      )}
+                      onClick={() =>
+                        updateActiveRowSettings((row) => ({
+                          ...row,
+                          psDocumentKind: kind,
+                        }))
+                      }
+                    >
+                      <span className="block text-sm font-semibold">
+                        {kind === "ITR_CERTIFICATE"
+                          ? "Свидетельство"
+                          : "Корочка / протокол / свидетельство"}
+                      </span>
+                      <span className="mt-1 block text-xs opacity-80">
+                        {kind === "ITR_CERTIFICATE"
+                          ? "Legacy-режим ПС без комплекта."
+                          : "Можно выбрать нужные документы комплекта."}
+                      </span>
+                    </button>
+                  ))}
                 </div>
 
                 {activeSettingsRow.psDocumentKind !== "ITR_CERTIFICATE" ? (
@@ -2651,9 +3007,7 @@ export function BiotCardGenerator({
                         {preset}
                       </option>
                     ))}
-                    <option value={CUSTOM_SUBJECT_VALUE}>
-                      Свое значение
-                    </option>
+                    <option value={CUSTOM_SUBJECT_VALUE}>Свое значение</option>
                   </Select>
                 </div>
 
@@ -3323,7 +3677,7 @@ export function BiotCardGenerator({
 
           if (
             usesTrainingSubject(type, rowDocumentKind) &&
-            !getRowEffectiveTrainingSubject(row)
+            !getRowTypeTrainingSubject(row, type, index)
           ) {
             throw new Error(
               `Укажите тему обучения в настройках строки ${index + 1}.`,
@@ -3331,11 +3685,7 @@ export function BiotCardGenerator({
           }
 
           if (
-            usesPhotoWithSelection(
-              type,
-              rowDocumentKind,
-              row.psIncludeCard,
-            ) &&
+            usesPhotoWithSelection(type, rowDocumentKind, row.psIncludeCard) &&
             !row.photoDataUrl
           ) {
             throw new Error(
@@ -3346,6 +3696,22 @@ export function BiotCardGenerator({
       });
 
       const requestTypes = [...selectedCertificateTypes];
+
+      const getRequestIssueDate = (
+        type: SafetyCardType,
+        typeDefaults: BiotCardDefaults,
+      ) =>
+        activeRows[0]
+          ? getRowTypeIssueDate(activeRows[0], type, 0, typeDefaults)
+          : issueDate;
+
+      const getRequestTrainingSubject = (
+        type: SafetyCardType,
+        typeDefaults: BiotCardDefaults,
+      ) =>
+        activeRows[0]
+          ? getRowTypeTrainingSubject(activeRows[0], type, 0, typeDefaults)
+          : effectiveTrainingSubject;
 
       const buildRequestPayload = (
         type: SafetyCardType,
@@ -3376,14 +3742,14 @@ export function BiotCardGenerator({
         requestCompanyKz: usesRequestCompany(type, typeBiotDocumentKind)
           ? requestWorkplaceKz
           : undefined,
-        issueDate,
+        issueDate: getRequestIssueDate(type, typeDefaults),
         seriesNumber: usesSeriesNumber(type, typeBiotDocumentKind)
           ? seriesNumber
           : "1",
         trainingSubject:
           requestTypes.length === 1 &&
           usesTrainingSubject(type, typeBiotDocumentKind)
-            ? effectiveTrainingSubject
+            ? getRequestTrainingSubject(type, typeDefaults)
             : typeDefaults.defaultTrainingSubject,
         items: activeRows.map((row, index) => ({
           employeeId: undefined,
@@ -3409,7 +3775,7 @@ export function BiotCardGenerator({
               ? row.certificateNumber.trim()
               : formatCertificateNumber(
                   type,
-                  issueDate,
+                  getRequestIssueDate(type, typeDefaults),
                   typeDefaults.nextCertificateSequence + index,
                   typeBiotDocumentKind,
                 ),
@@ -3419,7 +3785,7 @@ export function BiotCardGenerator({
               ? row.protocolNumber.trim()
               : formatProtocolNumber(
                   type,
-                  issueDate,
+                  getRequestIssueDate(type, typeDefaults),
                   typeDefaults.nextProtocolSequence + index,
                   typeBiotDocumentKind,
                 ),
@@ -3430,7 +3796,7 @@ export function BiotCardGenerator({
               ? requestTypes.length === 1
                 ? row.witnessCertificateNumber.trim()
                 : formatPsWitnessCertificateNumber(
-                    issueDate,
+                    getRequestIssueDate(type, typeDefaults),
                     (typeDefaults.nextWitnessCertificateSequence ?? 1) + index,
                   )
               : undefined,
@@ -3447,12 +3813,24 @@ export function BiotCardGenerator({
         })),
       });
 
-      const buildGenerationGroups = () => {
+      const buildGenerationGroups = async () => {
         const groups = new Map<string, GenerationGroup>();
 
-        activeRows.forEach((row) => {
-          getRowSelectedTypes(row).forEach((type) => {
+        for (const [rowIndex, row] of activeRows.entries()) {
+          for (const type of getRowSelectedTypes(row)) {
             const typeBiotDocumentKind = getRowDocumentKindForType(row, type);
+            const fallbackIssueDate = getRowTypeIssueDate(row, type, rowIndex);
+            const typeDefaults = await fetchDefaultsForType(
+              type,
+              fallbackIssueDate,
+              typeBiotDocumentKind,
+            );
+            const typeIssueDate = getRowTypeIssueDate(
+              row,
+              type,
+              rowIndex,
+              typeDefaults,
+            );
             const typeUsesRequestCompany = usesRequestCompany(
               type,
               typeBiotDocumentKind,
@@ -3475,7 +3853,7 @@ export function BiotCardGenerator({
               type,
               typeBiotDocumentKind,
             )
-              ? getRowEffectiveTrainingSubject(row)
+              ? getRowTypeTrainingSubject(row, type, rowIndex, typeDefaults)
               : "";
             const groupSeriesNumber = usesSeriesNumberWithSelection(
               type,
@@ -3493,7 +3871,7 @@ export function BiotCardGenerator({
             const key = JSON.stringify({
               type,
               typeBiotDocumentKind,
-              issueDate: row.issueDate,
+              issueDate: typeIssueDate,
               seriesNumber: groupSeriesNumber,
               trainingSubject,
               includeCard,
@@ -3506,14 +3884,14 @@ export function BiotCardGenerator({
 
             if (existingGroup) {
               existingGroup.rows.push(row);
-              return;
+              continue;
             }
 
             groups.set(key, {
               key,
               certificateType: type,
               biotDocumentKind: typeBiotDocumentKind,
-              issueDate: row.issueDate,
+              issueDate: typeIssueDate,
               seriesNumber: groupSeriesNumber,
               trainingSubject,
               includeCard,
@@ -3523,8 +3901,8 @@ export function BiotCardGenerator({
               requestCompanyKz,
               rows: [row],
             });
-          });
-        });
+          }
+        }
 
         return Array.from(groups.values());
       };
@@ -3671,7 +4049,7 @@ export function BiotCardGenerator({
         return;
       }
 
-      const generationGroups = buildGenerationGroups();
+      const generationGroups = await buildGenerationGroups();
 
       for (const group of generationGroups) {
         const typeDefaults = await fetchDefaultsForType(
@@ -3685,9 +4063,7 @@ export function BiotCardGenerator({
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(
-            buildGroupedRequestPayload(group, typeDefaults),
-          ),
+          body: JSON.stringify(buildGroupedRequestPayload(group, typeDefaults)),
         });
 
         if (!response.ok) {
@@ -4442,7 +4818,9 @@ export function BiotCardGenerator({
                                   event.currentTarget.value,
                                 )
                               }
-                              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                              onChange={(
+                                event: ChangeEvent<HTMLInputElement>,
+                              ) =>
                                 updateRowIssueDate(row.id, event.target.value)
                               }
                             />

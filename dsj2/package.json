@@ -5,14 +5,21 @@
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "build": "turbo build",
+    "build:local": "node scripts/run-local-build.mjs",
     "build:api:deploy": "corepack pnpm --filter @dsj/database db:generate && corepack pnpm --filter @dsj/types build && corepack pnpm --filter @dsj/database build && corepack pnpm --filter @dsj/utils build && corepack pnpm --filter @dsj/api build",
     "build:worker:deploy": "corepack pnpm --filter @dsj/database db:generate && corepack pnpm --filter @dsj/types build && corepack pnpm --filter @dsj/database build && corepack pnpm --filter @dsj/worker build",
     "dev": "turbo dev",
     "lint": "node -e \"console.error('No package-level lint tasks are configured yet. Use pnpm verify as the current compile/build gate.'); process.exit(1)\"",
-    "typecheck": "turbo typecheck",
-    "test": "node -e \"console.error('No package-level test tasks are configured yet. Use pnpm verify as the current compile/build gate.'); process.exit(1)\"",
-    "verify": "pnpm verify:stability",
-    "verify:stability": "pnpm db:generate && pnpm typecheck && pnpm build",
+    "typecheck": "pnpm db:generate && pnpm typecheck:turbo",
+    "typecheck:turbo": "turbo typecheck",
+    "test": "pnpm db:generate && pnpm test:turbo",
+    "test:turbo": "turbo test",
+    "verify": "pnpm verify:stability && pnpm test:turbo",
+    "verify:fast": "pnpm agent:doctor && pnpm db:generate && turbo typecheck --filter=@dsj/database --filter=@dsj/api --filter=@dsj/web --filter=@dsj/worker --filter=@dsj/ncalayer-bridge",
+    "verify:stability": "pnpm agent:doctor && pnpm typecheck && pnpm build:local",
+    "agent:doctor": "node scripts/agent-doctor.mjs",
+    "tenant:audit": "tsx scripts/audit-tenant-integrity.ts",
+    "security:backfill": "tsx scripts/backfill-security-hashes.ts",
     "format": "prettier --write .",
     "db:deploy": "corepack pnpm --filter @dsj/database db:deploy",
     "db:generate": "corepack pnpm --filter @dsj/database db:generate",
@@ -27,5 +34,17 @@
     "tsx": "^4.19.3",
     "turbo": "^2.4.2",
     "typescript": "^5.8.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "defu": "^6.1.5",
+      "effect": "^3.21.0",
+      "lodash": "^4.18.1",
+      "path-to-regexp": "^8.4.2",
+      "postcss": "^8.5.15",
+      "qs": "^6.15.2",
+      "uuid": "^11.1.1",
+      "ws": "^8.21.0"
+    }
   }
 }

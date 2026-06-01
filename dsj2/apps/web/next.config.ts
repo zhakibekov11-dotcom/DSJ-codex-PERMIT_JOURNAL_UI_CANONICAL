@@ -34,6 +34,20 @@ function loadWorkspaceEnv(projectRoot: string) {
 loadWorkspaceEnv(locatorProjectRoot);
 
 const enableLocator = process.env.NEXT_PUBLIC_ENABLE_LOCATOR === "1";
+const isDev = process.env.NODE_ENV !== "production";
+
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self' http://127.0.0.1:13579 http://localhost:13579",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "object-src 'none'",
+].join("; ");
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@dsj/ui", "@dsj/utils", "@dsj/types"],
@@ -45,6 +59,35 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   serverExternalPackages: ["sharp"],
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: contentSecurityPolicy,
+          },
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+          {
+            key: "Referrer-Policy",
+            value: "strict-origin-when-cross-origin",
+          },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=(), payment=()",
+          },
+          {
+            key: "X-Frame-Options",
+            value: "DENY",
+          },
+        ],
+      },
+    ];
+  },
   webpack: (config, { dev, isServer }) => {
     if (!enableLocator) {
       config.resolve.alias = {

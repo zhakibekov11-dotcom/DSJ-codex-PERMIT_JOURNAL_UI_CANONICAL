@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -21,6 +22,7 @@ import { hashSensitiveValue, maskIin } from "@dsj/database";
 import { hashDocumentPayload } from "@dsj/utils";
 import { AuditService } from "../audit/audit.service";
 import { assertOrganizationAccess } from "../common/utils/tenant-scope";
+import { parseBoolean } from "../common/utils/security-preflight";
 import type { AuthenticatedUser } from "../common/types/authenticated-user.type";
 import { CorePlatformService } from "../core-platform/core-platform.service";
 import { PrismaService } from "../database/prisma.service";
@@ -855,6 +857,33 @@ export class SigningService {
   async acceptEgovCallback(input: EgovMobileQrCallbackInput, secret?: string | null) {
     const expectedSecret = this.configService.get<string>("EGOV_MOBILE_QR_CALLBACK_SECRET");
     const hasExpectedSecret = Boolean(expectedSecret?.trim());
+    const isProduction = this.configService.get<string>("NODE_ENV") === "production";
+    const allowUnsignedLocalSimulation =
+      !isProduction &&
+      parseBoolean(
+        this.configService.get<string>("EGOV_MOBILE_QR_ALLOW_LOCAL_CALLBACK_SIMULATION"),
+        false,
+      );
+
+    if (!hasExpectedSecret && !allowUnsignedLocalSimulation) {
+      const event = await this.prisma.providerCallbackEvent.create({
+        data: {
+          provider: "EGOV_MOBILE_QR_PROVIDER",
+          providerSessionId: input.providerSessionId ?? null,
+          validationStatus: "REJECTED",
+          processingStatus: "FAILED",
+          redactedPayloadJson: this.redactCallbackPayload(input),
+          error: "Callback secret is not configured.",
+          correlationId: randomUUID(),
+        },
+      });
+
+      throw new ServiceUnavailableException({
+        code: "SIGNING_CALLBACK_SECRET_REQUIRED",
+        message: "Callback authentication is not configured.",
+        correlationId: event.correlationId,
+      });
+    }
 
     if (hasExpectedSecret && secret !== expectedSecret) {
       const event = await this.prisma.providerCallbackEvent.create({

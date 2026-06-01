@@ -45,6 +45,11 @@ function createExistingRecord(overrides: Record<string, unknown> = {}) {
   return {
     id: "record-1",
     companyId: "company-1",
+    organizationId: "company-1",
+    journalId: "journal-1",
+    journalKind: "INTRODUCTORY",
+    entryNo: 1,
+    registrationNo: "DSJ-2026-0001",
     briefingBatchId: null,
     briefingBatch: null,
     documentNumber: "DSJ-2026-0001",
@@ -62,6 +67,7 @@ function createExistingRecord(overrides: Record<string, unknown> = {}) {
     employeeStatus: "ASSIGNED",
     departmentId: "department-1",
     siteId: "site-1",
+    workSiteId: "site-1",
     employeeId: "employee-1",
     instructorUserId: "user-instructor-1",
     inviteToken: null,
@@ -80,6 +86,9 @@ function createExistingRecord(overrides: Record<string, unknown> = {}) {
     },
     department: null,
     site: null,
+    workSite: null,
+    documentEnvelope: null,
+    pendingSigners: [],
     signatures: [],
     ...overrides,
   };
@@ -99,6 +108,12 @@ function createEmployee(overrides: Record<string, unknown> = {}) {
     employeeKind: "INTERNAL",
     iinLast4: "0011",
     contractorCompany: null,
+    user: {
+      id: "user-employee-1",
+      email: "employee@example.com",
+      role: "EMPLOYEE_SIGNER",
+      isActive: true,
+    },
     ...overrides,
   };
 }
@@ -135,7 +150,13 @@ function createService(options?: {
           ? { id: where.id, companyId: where.companyId }
           : null,
     },
-    briefingRecord: {
+    briefingJournalEntry: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        state.briefingCreateData.push(data);
+        return {
+          id: "record-1",
+        };
+      },
       update: async ({ data }: { data: Record<string, unknown> }) => {
         state.briefingUpdateData.push(data);
         return {
@@ -143,6 +164,12 @@ function createService(options?: {
           ...data,
         };
       },
+    },
+    workSite: {
+      findFirst: async ({ where }: { where: { organizationId: string; id: string } }) =>
+        where.organizationId === "company-1" && sites.has(where.id)
+          ? { id: where.id, organizationId: where.organizationId, code: null, name: where.id, location: null }
+          : null,
     },
     $transaction: async (callback: (transaction: any) => Promise<unknown>) => {
       state.transactionCalls += 1;
@@ -211,13 +238,17 @@ function createService(options?: {
       (state.briefingUpdateData[0]?.departmentId as string | null | undefined) ??
       (state.briefingCreateData[0]?.departmentId as string | null | undefined) ??
       null,
-    siteId:
-      (state.briefingUpdateData[0]?.siteId as string | null | undefined) ??
-      (state.briefingCreateData[0]?.siteId as string | null | undefined) ??
+    workSiteId:
+      (state.briefingUpdateData[0]?.workSiteId as string | null | undefined) ??
+      (state.briefingCreateData[0]?.workSiteId as string | null | undefined) ??
       null,
+    documentHash: (options?.existingRecord?.documentHash as string | null | undefined) ?? null,
   });
   (service as any).findRawById = async () => options?.existingRecord ?? createExistingRecord();
   (service as any).generateJournalNumber = async () => "DSJ-2026-0001";
+  (service as any).ensureJournal = async () => ({ id: "journal-1" });
+  (service as any).nextEntryNo = async () => 1;
+  (service as any).nextRegistrationNo = async () => "DSJ-2026-0001";
   (service as any).queueSigningArtifacts = async () => undefined;
 
   return {
@@ -263,13 +294,14 @@ test("briefing create accepts same-company employee-derived department and site"
     }) as never,
   );
 
-  assert.equal(state.transactionCalls, 1);
+  assert.equal(state.briefingCreateData.length, 1);
   assert.equal(state.briefingCreateData[0]?.departmentId, "department-2");
-  assert.equal(state.briefingCreateData[0]?.siteId, "site-2");
+  assert.equal(state.briefingCreateData[0]?.workSiteId, "site-2");
   assert.deepEqual(record, {
     id: "record-1",
     departmentId: "department-2",
-    siteId: "site-2",
+    workSiteId: "site-2",
+    documentHash: null,
   });
 });
 
@@ -288,7 +320,7 @@ test("employee briefing details expose documentHash for NCALayer signing", async
 test("briefing update rejects a carried foreign site reference", async () => {
   const { service, state } = createService({
     existingRecord: createExistingRecord({
-      siteId: "site-foreign",
+      workSiteId: "site-foreign",
     }),
     sites: ["site-1", "site-2"],
   });
@@ -325,10 +357,11 @@ test("briefing update accepts same-company department and site", async () => {
 
   assert.equal(state.briefingUpdateData.length, 1);
   assert.equal(state.briefingUpdateData[0]?.departmentId, "department-2");
-  assert.equal(state.briefingUpdateData[0]?.siteId, "site-2");
+  assert.equal(state.briefingUpdateData[0]?.workSiteId, "site-2");
   assert.deepEqual(record, {
     id: "record-1",
     departmentId: "department-2",
-    siteId: "site-2",
+    workSiteId: "site-2",
+    documentHash: "digest-1",
   });
 });

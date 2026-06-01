@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Headers, Param, Post, Req } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import {
   cancelSigningSessionSchema,
   createSigningSessionSchema,
@@ -80,6 +81,7 @@ export class SigningController {
 
   @Post("signing/providers/egov-mobile-qr/callback")
   @Public()
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   async acceptEgovCallback(
     @Headers("x-egov-callback-secret") callbackSecret: string | undefined,
     @Headers("authorization") authorization: string | undefined,

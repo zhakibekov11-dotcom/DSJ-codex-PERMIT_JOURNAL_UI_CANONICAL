@@ -11,7 +11,12 @@ import type {
   EmployeeFilters,
   UpdateEmployeeInput,
 } from "@dsj/types";
-import { encryptSensitiveValue, hashSensitiveValue, maskIin } from "@dsj/database";
+import {
+  encryptSensitiveValue,
+  hashSensitiveValue,
+  hashSensitiveValueLegacy,
+  maskIin,
+} from "@dsj/database";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../database/prisma.service";
 import type { AuthenticatedUser } from "../common/types/authenticated-user.type";
@@ -60,6 +65,35 @@ export class EmployeesService {
   private normalizeEmail(value?: string | null) {
     const normalized = value?.trim().toLowerCase() ?? "";
     return normalized.length > 0 ? normalized : null;
+  }
+
+  private buildIinHashes(iin: string) {
+    return {
+      current: hashSensitiveValue(iin),
+      legacy: hashSensitiveValueLegacy(iin),
+    };
+  }
+
+  private async ensureIinAvailable(companyId: string, iin: string, currentEmployeeId?: string) {
+    const hashes = this.buildIinHashes(iin);
+    const duplicate = await this.prisma.employee.findFirst({
+      where: {
+        companyId,
+        iinHash: {
+          in: [...new Set([hashes.current, hashes.legacy])],
+        },
+        ...(currentEmployeeId ? { id: { not: currentEmployeeId } } : {}),
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (duplicate) {
+      throw new ConflictException("Сотрудник с таким ИИН уже существует в этой компании.");
+    }
+
+    return hashes;
   }
 
   private getEmployeeKindSearchClauses(search: string): Prisma.EmployeeWhereInput[] {
@@ -289,6 +323,7 @@ export class EmployeesService {
       throw new BadRequestException("Укажите временный пароль для личного кабинета сотрудника.");
     }
 
+    const iinHashes = await this.ensureIinAvailable(companyId, input.iin);
     let employee;
 
     try {
@@ -331,7 +366,7 @@ export class EmployeesService {
             contractorCompanyId: contractorCompany?.id ?? null,
             fullName: input.fullName,
             iinEncrypted: encryptSensitiveValue(input.iin),
-            iinHash: hashSensitiveValue(input.iin),
+            iinHash: iinHashes.current,
             iinLast4: input.iin.slice(-4),
             employeeNumber: input.employeeNumber,
             jobTitle: input.jobTitle,
@@ -401,6 +436,9 @@ export class EmployeesService {
     const employeeKind = contractorCompany ? "CONTRACTOR" : input.employeeKind ?? existing.employeeKind;
     const shouldCreateAccount = input.createAccount === true;
     const normalizedEmail = this.normalizeEmail(input.email === undefined ? existing.email : input.email);
+    const iinHashes = input.iin
+      ? await this.ensureIinAvailable(existing.companyId, input.iin, existing.id)
+      : null;
 
     if (shouldCreateAccount && !existing.userId && !normalizedEmail) {
       throw new BadRequestException("Укажите email сотрудника для создания личного кабинета.");
@@ -503,7 +541,7 @@ export class EmployeesService {
             ...(input.iin
               ? {
                   iinEncrypted: encryptSensitiveValue(input.iin),
-                  iinHash: hashSensitiveValue(input.iin),
+                  iinHash: iinHashes!.current,
                   iinLast4: input.iin.slice(-4),
                 }
               : {}),

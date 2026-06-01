@@ -51,6 +51,8 @@ const CORRESPONDENCE_DOCX_TEMPLATE_PATH =
 const CORRESPONDENCE_DOCX_SCRIPT_PATH =
   "scripts/generate_correspondence_docx.py";
 const STROY_COMPANY_WORD_TEMPLATE_MARKER = "stroy company 2030";
+const EMAIL_TRANSPORT_NOT_CONFIGURED =
+  "Email transport is not configured; correspondence was not sent externally.";
 
 @Injectable()
 export class CorrespondenceService {
@@ -372,9 +374,9 @@ export class CorrespondenceService {
       throw new BadRequestException("Добавьте хотя бы одного получателя.");
     }
 
-    const sentAt = new Date();
     let sentCount = 0;
     let failedCount = 0;
+    let deferredCount = 0;
 
     await this.prisma.$transaction(async (transaction) => {
       for (const recipient of record.recipients) {
@@ -390,13 +392,13 @@ export class CorrespondenceService {
           continue;
         }
 
-        sentCount += 1;
+        deferredCount += 1;
         await transaction.correspondenceRecipient.update({
           where: { id: recipient.id },
           data: {
-            status: "SENT",
-            sentAt,
-            lastError: null,
+            status: "PENDING",
+            sentAt: null,
+            lastError: EMAIL_TRANSPORT_NOT_CONFIGURED,
           },
         });
       }
@@ -404,13 +406,8 @@ export class CorrespondenceService {
       await transaction.correspondence.update({
         where: { id: record.id },
         data: {
-          status:
-            sentCount === 0
-              ? "READY_TO_SEND"
-              : failedCount > 0
-                ? "PARTIALLY_SENT"
-                : "SENT",
-          sentAt: sentCount > 0 ? sentAt : null,
+          status: "READY_TO_SEND",
+          sentAt: null,
         },
       });
     });
@@ -418,12 +415,14 @@ export class CorrespondenceService {
     await this.auditService.log({
       actorUserId: user.userId,
       companyId: record.companyId,
-      action: "correspondence.sent",
+      action: "correspondence.delivery_deferred",
       entityType: "Correspondence",
       entityId: record.id,
       metadata: {
         sentCount,
         failedCount,
+        deferredCount,
+        transportConfigured: false,
       },
     });
 

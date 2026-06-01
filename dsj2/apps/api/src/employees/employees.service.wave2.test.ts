@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, ConflictException } from "@nestjs/common";
 import type { AuthenticatedUser } from "../common/types/authenticated-user.type";
 import { EmployeesService } from "./employees.service";
 
 process.env.FIELD_ENCRYPTION_KEY ??= "wave-2-test-key";
+process.env.FIELD_HASH_PEPPER ??= "wave-2-test-pepper";
 
 const adminUser: AuthenticatedUser = {
   userId: "user-admin-1",
@@ -60,15 +61,18 @@ function createExistingEmployee(overrides: Record<string, unknown> = {}) {
 
 function createService(options?: {
   departments?: string[];
+  duplicateEmployee?: Record<string, unknown> | null;
   existingEmployee?: Record<string, unknown>;
   sites?: string[];
 }) {
   const state: {
     employeeCreateData: Record<string, unknown> | null;
+    employeeFindFirstWhere: unknown;
     employeeUpdateData: Record<string, unknown> | null;
     transactionCalls: number;
   } = {
     employeeCreateData: null,
+    employeeFindFirstWhere: null,
     employeeUpdateData: null,
     transactionCalls: 0,
   };
@@ -90,6 +94,12 @@ function createService(options?: {
         where.companyId === "company-1" && sites.has(where.id)
           ? { id: where.id, companyId: where.companyId }
           : null,
+    },
+    employee: {
+      findFirst: async ({ where }: { where: unknown }) => {
+        state.employeeFindFirstWhere = where;
+        return options?.duplicateEmployee ?? null;
+      },
     },
     $transaction: async (callback: (transaction: any) => Promise<unknown>) => {
       state.transactionCalls += 1;
@@ -167,6 +177,36 @@ test("employees create rejects a department from another company", async () => {
         }) as never,
       ),
     (error) => error instanceof BadRequestException,
+  );
+
+  assert.equal(state.transactionCalls, 0);
+});
+
+test("employees create pre-checks current and legacy IIN hashes", async () => {
+  const { service, state } = createService();
+
+  await service.create(adminUser, createInput() as never);
+
+  const where = state.employeeFindFirstWhere as {
+    companyId: string;
+    iinHash: { in: string[] };
+  };
+
+  assert.equal(where.companyId, "company-1");
+  assert.equal(where.iinHash.in.length, 2);
+  assert.notEqual(where.iinHash.in[0], where.iinHash.in[1]);
+});
+
+test("employees create rejects duplicate IIN hashes before writing", async () => {
+  const { service, state } = createService({
+    duplicateEmployee: {
+      id: "employee-duplicate",
+    },
+  });
+
+  await assert.rejects(
+    () => service.create(adminUser, createInput() as never),
+    (error) => error instanceof ConflictException,
   );
 
   assert.equal(state.transactionCalls, 0);

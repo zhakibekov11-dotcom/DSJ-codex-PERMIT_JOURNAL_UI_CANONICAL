@@ -13,8 +13,8 @@
   "dependencies": {
     "@dsj/database": "workspace:*",
     "@dsj/utils": "workspace:*",
-    "@prisma/client": "^6.4.1",
-    "bullmq": "^5.41.5",
+    "@prisma/client": "^6.19.3",
+    "bullmq": "^5.77.6",
     "dotenv": "^16.4.7",
     "ioredis": "^5.4.2"
   }

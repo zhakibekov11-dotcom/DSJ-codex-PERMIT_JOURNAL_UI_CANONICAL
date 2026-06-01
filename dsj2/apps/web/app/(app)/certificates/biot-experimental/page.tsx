@@ -3,7 +3,7 @@ import type {
   CardGenerationRequestSummary,
   UserRole,
 } from "@dsj/types";
-import { PageHeader } from "@dsj/ui";
+import { EmptyState, PageHeader } from "@dsj/ui";
 import { CompanySwitcher } from "@/components/company-switcher";
 import { BiotCardGenerator } from "@/components/biot-card-generator";
 import { apiFetch } from "@/lib/api";
@@ -11,6 +11,29 @@ import { requireRoleAccess } from "@/lib/auth";
 import { resolveCompanyContext } from "@/lib/company-context";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+type BiotEmployeeOption = {
+  id: string;
+  fullName: string;
+  employeeNumber: string;
+  jobTitle: string;
+  jobTitleKz: string | null;
+  photoDataUrl: string | null;
+  photoFileName: string | null;
+  employeeKind: string;
+  contractorCompany: {
+    name: string;
+  } | null;
+};
+
+type BiotTrainingAssignmentOption = {
+  id: string;
+  employeeId: string;
+  status: string;
+  trainingProgram: {
+    title: string;
+  };
+};
 
 export default async function BiotExperimentalPage({
   searchParams,
@@ -32,65 +55,83 @@ export default async function BiotExperimentalPage({
     defaultsQuery.set("companyId", activeCompanyId);
   }
 
-  const [employees, trainingAssignments, initialDefaults, initialRequests] =
-    await Promise.all([
-      apiFetch<
-        Array<{
-          id: string;
-          fullName: string;
-          employeeNumber: string;
-          jobTitle: string;
-          jobTitleKz: string | null;
-          photoDataUrl: string | null;
-          photoFileName: string | null;
-          employeeKind: string;
-          contractorCompany: {
-            name: string;
-          } | null;
-        }>
-      >(`employees${scopedQuery}`),
-      apiFetch<
-        Array<{
-          id: string;
-          employeeId: string;
-          status: string;
-          trainingProgram: {
-            title: string;
-          };
-        }>
-      >(`training-assignments${scopedQuery}`),
-      apiFetch<BiotCardDefaults>(
-        `biot-cards/defaults?${defaultsQuery.toString()}`,
-      ),
-      apiFetch<CardGenerationRequestSummary[]>(
-        `biot-cards/requests${scopedQuery}`,
-      ),
-    ]);
-
   const activeCompany =
     companies.find((company) => company.id === activeCompanyId) ?? null;
 
+  const header = (
+    <PageHeader>
+      <div>
+        <h1>Редактор шаблонов удостоверений</h1>
+        <p>
+          Рабочий экран для подготовки удостоверений и связанных документов по
+          шаблонам компании.
+        </p>
+      </div>
+      {companies.length > 1 && activeCompanyId ? (
+        <div className="rounded-lg border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
+          <CompanySwitcher
+            pathname="/certificates/biot-experimental"
+            companies={companies}
+            activeCompanyId={activeCompanyId}
+            searchParams={params}
+          />
+        </div>
+      ) : null}
+    </PageHeader>
+  );
+
+  if (!activeCompanyId) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <EmptyState className="items-start text-left">
+          Для работы с удостоверениями нужно выбрать компанию.
+        </EmptyState>
+      </div>
+    );
+  }
+
+  let employees: BiotEmployeeOption[] = [];
+  let trainingAssignments: BiotTrainingAssignmentOption[] = [];
+  let initialDefaults: BiotCardDefaults | null = null;
+  let initialRequests: CardGenerationRequestSummary[] = [];
+  let loadError: string | null = null;
+
+  try {
+    [employees, trainingAssignments, initialDefaults, initialRequests] =
+      await Promise.all([
+        apiFetch<BiotEmployeeOption[]>(`employees${scopedQuery}`),
+        apiFetch<BiotTrainingAssignmentOption[]>(
+          `training-assignments${scopedQuery}`,
+        ),
+        apiFetch<BiotCardDefaults>(
+          `biot-cards/defaults?${defaultsQuery.toString()}`,
+        ),
+        apiFetch<CardGenerationRequestSummary[]>(
+          `biot-cards/requests${scopedQuery}`,
+        ),
+      ]);
+  } catch (error) {
+    loadError =
+      error instanceof Error
+        ? error.message
+        : "Не удалось загрузить данные удостоверений.";
+  }
+
+  if (!initialDefaults) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <EmptyState className="items-start text-left">
+          {loadError ?? "Не удалось загрузить данные удостоверений."}
+        </EmptyState>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader>
-        <div>
-          <h1>Редактор шаблонов удостоверений</h1>
-          <p>
-            Рабочий экран для подготовки удостоверений и связанных документов
-            по шаблонам компании.
-          </p>
-        </div>
-        {companies.length > 1 && activeCompanyId ? (
-          <div className="rounded-lg border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
-            <CompanySwitcher
-              pathname="/certificates/biot-experimental"
-              companies={companies}
-              activeCompanyId={activeCompanyId}
-              searchParams={params}
-            />
-          </div>
-        ) : null}
-      </PageHeader>
+      {header}
 
       <BiotCardGenerator
         companyId={activeCompanyId}

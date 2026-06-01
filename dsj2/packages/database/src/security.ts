@@ -1,4 +1,10 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  createHmac,
+  randomBytes,
+} from "node:crypto";
 
 function getKey() {
   const rawKey = process.env.FIELD_ENCRYPTION_KEY;
@@ -8,6 +14,22 @@ function getKey() {
   }
 
   return createHash("sha256").update(rawKey).digest();
+}
+
+function getHashPepper() {
+  const rawPepper = process.env.FIELD_HASH_PEPPER?.trim();
+
+  if (rawPepper) {
+    return rawPepper;
+  }
+
+  const encryptionKeyFallback = process.env.FIELD_ENCRYPTION_KEY?.trim();
+
+  if ((process.env.NODE_ENV ?? "development") !== "production" && encryptionKeyFallback) {
+    return encryptionKeyFallback;
+  }
+
+  throw new Error("FIELD_HASH_PEPPER is required for deterministic sensitive value hashing.");
 }
 
 export function encryptSensitiveValue(value: string) {
@@ -31,10 +53,21 @@ export function decryptSensitiveValue(payload: string) {
 }
 
 export function hashSensitiveValue(value: string) {
+  return createHmac("sha256", getHashPepper()).update(value).digest("hex");
+}
+
+export function hashSensitiveValueLegacy(value: string) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+export function generateInviteToken() {
+  return randomBytes(32).toString("base64url");
+}
+
+export function hashInviteToken(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
 export function maskIin(value: string) {
   return `********${value.slice(-4)}`;
 }
-

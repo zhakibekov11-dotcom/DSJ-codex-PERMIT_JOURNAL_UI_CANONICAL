@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BadRequestException, ConflictException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import type { AuthenticatedUser } from "../common/types/authenticated-user.type";
 import { EmployeesService } from "./employees.service";
 
@@ -62,6 +63,7 @@ function createExistingEmployee(overrides: Record<string, unknown> = {}) {
 function createService(options?: {
   departments?: string[];
   duplicateEmployee?: Record<string, unknown> | null;
+  employeeCreateError?: Error;
   existingEmployee?: Record<string, unknown>;
   sites?: string[];
 }) {
@@ -76,7 +78,9 @@ function createService(options?: {
     employeeUpdateData: null,
     transactionCalls: 0,
   };
-  const departments = new Set(options?.departments ?? ["department-1", "department-2"]);
+  const departments = new Set(
+    options?.departments ?? ["department-1", "department-2"],
+  );
   const sites = new Set(options?.sites ?? ["site-1", "site-2"]);
 
   const prisma = {
@@ -84,13 +88,21 @@ function createService(options?: {
       findFirst: async () => null,
     },
     department: {
-      findFirst: async ({ where }: { where: { companyId: string; id: string } }) =>
+      findFirst: async ({
+        where,
+      }: {
+        where: { companyId: string; id: string };
+      }) =>
         where.companyId === "company-1" && departments.has(where.id)
           ? { id: where.id, companyId: where.companyId }
           : null,
     },
     site: {
-      findFirst: async ({ where }: { where: { companyId: string; id: string } }) =>
+      findFirst: async ({
+        where,
+      }: {
+        where: { companyId: string; id: string };
+      }) =>
         where.companyId === "company-1" && sites.has(where.id)
           ? { id: where.id, companyId: where.companyId }
           : null,
@@ -115,6 +127,10 @@ function createService(options?: {
         },
         employee: {
           create: async ({ data }: { data: Record<string, unknown> }) => {
+            if (options?.employeeCreateError) {
+              throw options.employeeCreateError;
+            }
+
             state.employeeCreateData = data;
             return {
               id: "employee-1",
@@ -233,6 +249,40 @@ test("employees create accepts same-company department and site", async () => {
   });
 });
 
+test("employees create accepts an empty Kazakh job title", async () => {
+  const { service, state } = createService();
+
+  await service.create(
+    adminUser,
+    createInput({
+      jobTitleKz: null,
+    }) as never,
+  );
+
+  assert.equal(state.employeeCreateData?.jobTitle, "Safety Engineer");
+  assert.equal(state.employeeCreateData?.jobTitleKz, null);
+});
+
+test("employees create maps duplicate employee numbers to conflict errors", async () => {
+  const { service } = createService({
+    employeeCreateError: new Prisma.PrismaClientKnownRequestError(
+      "Unique constraint failed",
+      {
+        code: "P2002",
+        clientVersion: "test",
+        meta: {
+          target: ["companyId", "employeeNumber"],
+        },
+      },
+    ),
+  });
+
+  await assert.rejects(
+    () => service.create(adminUser, createInput() as never),
+    (error) => error instanceof ConflictException,
+  );
+});
+
 test("employees update rejects a carried foreign site reference", async () => {
   const { service, state } = createService({
     existingEmployee: createExistingEmployee({
@@ -243,13 +293,9 @@ test("employees update rejects a carried foreign site reference", async () => {
 
   await assert.rejects(
     () =>
-      service.update(
-        adminUser,
-        "employee-1",
-        {
-          fullName: "Updated Name",
-        } as never,
-      ),
+      service.update(adminUser, "employee-1", {
+        fullName: "Updated Name",
+      } as never),
     (error) => error instanceof BadRequestException,
   );
 
@@ -261,15 +307,11 @@ test("employees update accepts same-company department and site", async () => {
     existingEmployee: createExistingEmployee(),
   });
 
-  const employee = await service.update(
-    adminUser,
-    "employee-1",
-    {
-      departmentId: "department-2",
-      siteId: "site-2",
-      fullName: "Updated Name",
-    } as never,
-  );
+  const employee = await service.update(adminUser, "employee-1", {
+    departmentId: "department-2",
+    siteId: "site-2",
+    fullName: "Updated Name",
+  } as never);
 
   assert.equal(state.transactionCalls, 1);
   assert.equal(state.employeeUpdateData?.departmentId, "department-2");
@@ -279,4 +321,18 @@ test("employees update accepts same-company department and site", async () => {
     departmentId: "department-2",
     siteId: "site-2",
   });
+});
+
+test("employees update can clear the Kazakh job title", async () => {
+  const { service, state } = createService({
+    existingEmployee: createExistingEmployee({
+      jobTitleKz: "Existing KZ",
+    }),
+  });
+
+  await service.update(adminUser, "employee-1", {
+    jobTitleKz: null,
+  } as never);
+
+  assert.equal(state.employeeUpdateData?.jobTitleKz, null);
 });

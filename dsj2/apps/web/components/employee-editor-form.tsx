@@ -49,6 +49,7 @@ export function EmployeeEditorForm({
   positions,
   contractorCompanies,
   employee,
+  returnTo,
 }: {
   mode: "create" | "edit";
   action: (formData: FormData) => void | Promise<void>;
@@ -57,17 +58,25 @@ export function EmployeeEditorForm({
   positions: PositionOption[];
   contractorCompanies: ContractorCompanyOption[];
   employee?: EmployeeFormData;
+  returnTo?: string | null;
 }) {
   const isEdit = mode === "edit";
 
   return (
     <form action={action} className="grid gap-4 md:grid-cols-2">
-      {isEdit ? <input type="hidden" name="employeeId" value={employee?.id ?? ""} /> : null}
+      {isEdit ? (
+        <input type="hidden" name="employeeId" value={employee?.id ?? ""} />
+      ) : null}
       <input type="hidden" name="companyId" value={companyId} />
+      {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
 
       <div className="space-y-1.5 md:col-span-2">
         <label className="text-sm font-medium text-slate-700">ФИО</label>
-        <Input name="fullName" defaultValue={employee?.fullName ?? ""} required />
+        <Input
+          name="fullName"
+          defaultValue={employee?.fullName ?? ""}
+          required
+        />
       </div>
 
       <div className="space-y-1.5">
@@ -88,8 +97,14 @@ export function EmployeeEditorForm({
       </div>
 
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-slate-700">Табельный номер</label>
-        <Input name="employeeNumber" defaultValue={employee?.employeeNumber ?? ""} required />
+        <label className="text-sm font-medium text-slate-700">
+          Табельный номер
+        </label>
+        <Input
+          name="employeeNumber"
+          defaultValue={employee?.employeeNumber ?? ""}
+          required
+        />
       </div>
 
       <JobTitleTranslationFields
@@ -100,12 +115,16 @@ export function EmployeeEditorForm({
         ruDefaultValue={employee?.jobTitle ?? ""}
         kzDefaultValue={employee?.jobTitleKz ?? ""}
         ruRequired
-        kzRequired
       />
 
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-slate-700">Тип сотрудника</label>
-        <Select name="employeeKind" defaultValue={employee?.employeeKind ?? "INTERNAL"}>
+        <label className="text-sm font-medium text-slate-700">
+          Тип сотрудника
+        </label>
+        <Select
+          name="employeeKind"
+          defaultValue={employee?.employeeKind ?? "INTERNAL"}
+        >
           {Object.entries(employeeKindLabels).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -127,7 +146,9 @@ export function EmployeeEditorForm({
       )}
 
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-slate-700">Подразделение</label>
+        <label className="text-sm font-medium text-slate-700">
+          Подразделение
+        </label>
         <Select name="departmentId" defaultValue={employee?.departmentId ?? ""}>
           <option value="">Не назначено</option>
           {departments.map((department) => (
@@ -151,8 +172,13 @@ export function EmployeeEditorForm({
       </div>
 
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-slate-700">Подрядная компания</label>
-        <Select name="contractorCompanyId" defaultValue={employee?.contractorCompanyId ?? ""}>
+        <label className="text-sm font-medium text-slate-700">
+          Подрядная компания
+        </label>
+        <Select
+          name="contractorCompanyId"
+          defaultValue={employee?.contractorCompanyId ?? ""}
+        >
           <option value="">Не назначена</option>
           {contractorCompanies.map((company) => (
             <option key={company.id} value={company.id}>
@@ -163,7 +189,9 @@ export function EmployeeEditorForm({
       </div>
 
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-slate-700">Электронная почта</label>
+        <label className="text-sm font-medium text-slate-700">
+          Электронная почта
+        </label>
         <Input
           name="email"
           type="email"
@@ -174,14 +202,19 @@ export function EmployeeEditorForm({
 
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-slate-700">Телефон</label>
-        <Input name="phone" defaultValue={employee?.phone ?? ""} placeholder="+77015550015" />
+        <Input
+          name="phone"
+          defaultValue={employee?.phone ?? ""}
+          placeholder="+77015550015"
+        />
       </div>
 
       <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
         <div>
           <p className="text-sm font-medium text-slate-800">Фото сотрудника</p>
           <p className="mt-1 text-xs text-slate-500">
-            Необязательно. Если фото загружено, оно автоматически подтянется в редактор шаблонов удостоверений.
+            Необязательно. Если фото загружено, оно автоматически подтянется в
+            редактор шаблонов удостоверений.
           </p>
         </div>
 
@@ -198,7 +231,11 @@ export function EmployeeEditorForm({
             <div className="space-y-2 text-sm text-slate-600">
               <p>{employee.photoFileName ?? "Текущее фото сотрудника"}</p>
               <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
-                <input type="checkbox" name="removePhoto" className="h-4 w-4 rounded border-slate-300" />
+                <input
+                  type="checkbox"
+                  name="removePhoto"
+                  className="h-4 w-4 rounded border-slate-300"
+                />
                 Удалить текущее фото
               </label>
             </div>
@@ -216,7 +253,8 @@ export function EmployeeEditorForm({
             pasteHint="Можно вставить фото из буфера: кликните сюда и нажмите Ctrl+V / Cmd+V"
           />
           <p className="text-xs text-slate-400">
-            JPG/PNG, исходный файл до 10 МБ. Система сама подготовит фото под шаблоны удостоверений.
+            JPG/PNG, исходный файл до 10 МБ. Система сама подготовит фото под
+            шаблоны удостоверений.
           </p>
         </div>
       </div>
@@ -231,8 +269,13 @@ export function EmployeeEditorForm({
           />
           <div className="space-y-3">
             <div>
-              <label htmlFor="createAccount" className="text-sm font-medium text-slate-800">
-                {employee?.hasAccount ? "Обновить данные личного кабинета" : "Создать личный кабинет сотрудника"}
+              <label
+                htmlFor="createAccount"
+                className="text-sm font-medium text-slate-800"
+              >
+                {employee?.hasAccount
+                  ? "Обновить данные личного кабинета"
+                  : "Создать личный кабинет сотрудника"}
               </label>
               <p className="mt-1 text-xs text-slate-500">
                 {employee?.hasAccount
@@ -241,8 +284,14 @@ export function EmployeeEditorForm({
               </p>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">Новый / временный пароль</label>
-              <Input name="accountPassword" type="password" placeholder="Минимум 8 символов" />
+              <label className="text-sm font-medium text-slate-700">
+                Новый / временный пароль
+              </label>
+              <Input
+                name="accountPassword"
+                type="password"
+                placeholder="Минимум 8 символов"
+              />
             </div>
           </div>
         </div>

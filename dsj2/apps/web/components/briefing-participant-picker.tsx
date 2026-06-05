@@ -4,6 +4,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import { Button, Input } from "@dsj/ui";
 import { employeeKindLabels } from "../lib/labels";
+import { getEmployeeSigningReadiness } from "../lib/employee-signing-readiness";
 
 type EmployeeOption = {
   id: string;
@@ -11,6 +12,7 @@ type EmployeeOption = {
   employeeNumber: string;
   employeeKind: string;
   contractorCompany?: { name: string } | null;
+  hasAccount?: boolean;
   accountEmail?: string | null;
   accountRole?: string | null;
   hasEmployeeSignerAccount?: boolean;
@@ -27,6 +29,7 @@ type BriefingParticipantPickerProps = {
   selectedEmptyState?: string;
   searchPlaceholder?: string;
   searchEndpoint?: string;
+  showSigningReadiness?: boolean;
 };
 
 export function BriefingParticipantPicker({
@@ -40,6 +43,7 @@ export function BriefingParticipantPicker({
   selectedEmptyState = "Пока никто не выбран. Добавь хотя бы одного сотрудника в список справа.",
   searchPlaceholder = "Поиск сотрудника или подрядчика",
   searchEndpoint,
+  showSigningReadiness = false,
 }: BriefingParticipantPickerProps) {
   const [search, setSearch] = useState("");
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>(initialEmployeeIds);
@@ -179,6 +183,13 @@ export function BriefingParticipantPicker({
                     {employeeKindLabels[employee.employeeKind] ?? employee.employeeKind}
                     {employee.contractorCompany?.name ? ` • ${employee.contractorCompany.name}` : ""}
                   </p>
+                  {showSigningReadiness ? (
+                    <span
+                      className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${getEmployeeSigningReadiness(employee).className}`}
+                    >
+                      {getEmployeeSigningReadiness(employee).label}
+                    </span>
+                  ) : null}
                 </div>
                 <Button
                   type="button"
@@ -233,6 +244,13 @@ export function BriefingParticipantPicker({
                     {employeeKindLabels[employee.employeeKind] ?? employee.employeeKind}
                     {employee.contractorCompany?.name ? ` • ${employee.contractorCompany.name}` : ""}
                   </p>
+                  {showSigningReadiness ? (
+                    <span
+                      className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${getEmployeeSigningReadiness(employee).className}`}
+                    >
+                      {getEmployeeSigningReadiness(employee).label}
+                    </span>
+                  ) : null}
                 </div>
                 <Button
                   type="button"

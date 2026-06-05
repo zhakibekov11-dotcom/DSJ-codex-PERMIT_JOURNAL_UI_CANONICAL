@@ -46,7 +46,10 @@ export class BiotCardsController {
   ) {
     const result = await this.biotCardsService.generate(user, input);
     response.setHeader("Content-Type", result.contentType);
-    response.setHeader("Content-Disposition", `attachment; filename="${result.fileName}"`);
+    response.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${result.fileName}"`,
+    );
     if ("requestId" in result && result.requestId) {
       response.setHeader("X-Card-Request-Id", result.requestId);
     }
@@ -63,7 +66,10 @@ export class BiotCardsController {
   ) {
     const result = await this.biotCardsService.generateBatch(user, input);
     response.setHeader("Content-Type", result.contentType);
-    response.setHeader("Content-Disposition", `attachment; filename="${result.fileName}"`);
+    response.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${result.fileName}"`,
+    );
     if ("requestId" in result && result.requestId) {
       response.setHeader("X-Card-Request-Id", result.requestId);
     }
@@ -118,11 +124,20 @@ export class BiotCardsController {
   async exportRegistry(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") id: string,
+    @Query(new ZodValidationPipe(cardGenerationRequestQuerySchema))
+    query: Parameters<BiotCardsService["exportRequestRegistry"]>[2],
     @Res() response: Response,
   ) {
-    const result = await this.biotCardsService.exportRequestRegistry(user, id);
+    const result = await this.biotCardsService.exportRequestRegistry(
+      user,
+      id,
+      query,
+    );
     response.setHeader("Content-Type", result.contentType);
-    response.setHeader("Content-Disposition", `attachment; filename="${result.fileName}"`);
+    response.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${result.fileName}"`,
+    );
     response.send(result.buffer);
   }
 
@@ -131,11 +146,20 @@ export class BiotCardsController {
   async exportCards(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") id: string,
+    @Query(new ZodValidationPipe(cardGenerationRequestQuerySchema))
+    query: Parameters<BiotCardsService["exportRequestCards"]>[2],
     @Res() response: Response,
   ) {
-    const result = await this.biotCardsService.exportRequestCards(user, id);
+    const result = await this.biotCardsService.exportRequestCards(
+      user,
+      id,
+      query,
+    );
     response.setHeader("Content-Type", result.contentType);
-    response.setHeader("Content-Disposition", `attachment; filename="${result.fileName}"`);
+    response.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${result.fileName}"`,
+    );
     response.send(result.buffer);
   }
 
@@ -144,11 +168,20 @@ export class BiotCardsController {
   async exportProtocol(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") id: string,
+    @Query(new ZodValidationPipe(cardGenerationRequestQuerySchema))
+    query: Parameters<BiotCardsService["exportRequestProtocol"]>[2],
     @Res() response: Response,
   ) {
-    const result = await this.biotCardsService.exportRequestProtocol(user, id);
+    const result = await this.biotCardsService.exportRequestProtocol(
+      user,
+      id,
+      query,
+    );
     response.setHeader("Content-Type", result.contentType);
-    response.setHeader("Content-Disposition", `attachment; filename="${result.fileName}"`);
+    response.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${result.fileName}"`,
+    );
     response.send(result.buffer);
   }
 
@@ -157,11 +190,20 @@ export class BiotCardsController {
   async exportWitness(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") id: string,
+    @Query(new ZodValidationPipe(cardGenerationRequestQuerySchema))
+    query: Parameters<BiotCardsService["exportRequestWitness"]>[2],
     @Res() response: Response,
   ) {
-    const result = await this.biotCardsService.exportRequestWitness(user, id);
+    const result = await this.biotCardsService.exportRequestWitness(
+      user,
+      id,
+      query,
+    );
     response.setHeader("Content-Type", result.contentType);
-    response.setHeader("Content-Disposition", `attachment; filename="${result.fileName}"`);
+    response.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${result.fileName}"`,
+    );
     response.send(result.buffer);
   }
 }

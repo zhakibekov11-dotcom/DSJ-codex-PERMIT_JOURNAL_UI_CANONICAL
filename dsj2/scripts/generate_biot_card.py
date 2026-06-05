@@ -29,6 +29,10 @@ CT = f"{{{CONTENT_TYPES_NS}}}"
 O = f"{{{OFFICE_NS}}}"
 
 
+def read_json_stdin() -> object:
+    return json.loads(sys.stdin.buffer.read().decode("utf-8"))
+
+
 def normalize_value(value: object) -> str:
     if value is None:
         return ""
@@ -1000,7 +1004,7 @@ def main() -> int:
 
     try:
         fields, photo, text_replacements, field_style_overrides = validate_payload(
-            json.load(sys.stdin)
+            read_json_stdin()
         )
         render(
             template_path,

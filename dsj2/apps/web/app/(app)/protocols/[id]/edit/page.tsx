@@ -4,6 +4,7 @@ import { updateProtocolAction } from "@/actions/protocol";
 import { ProtocolDraftForm } from "@/components/protocol-draft-form";
 import { apiFetch } from "@/lib/api";
 import { requireRoleAccess } from "@/lib/auth";
+import { buildWorkSitesManageHref } from "@/lib/safe-return-path";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -128,6 +129,10 @@ export default async function EditProtocolPage({
             employees={employees}
             departments={departments}
             workSites={workSites}
+            workSitesManageHref={buildWorkSitesManageHref(
+              effectiveCompanyId,
+              `/protocols/${protocol.id}/edit${scopedQuery}`,
+            )}
             initialValues={{
               number: protocol.number,
               date: protocol.date,

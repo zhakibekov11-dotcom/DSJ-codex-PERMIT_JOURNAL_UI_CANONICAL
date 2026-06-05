@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import type {
   CompanyDocumentFilters,
   CreateCompanyDocumentInput,
@@ -17,6 +14,8 @@ import {
   assertPythonModuleAvailable,
   assertPython3Available,
   assertReadablePath,
+  getPythonCommand,
+  getPythonProcessEnv,
   toRuntimeDependencyError,
 } from "../common/utils/runtime-dependencies";
 import {
@@ -88,7 +87,10 @@ export class CompanyDocumentsService {
     return record;
   }
 
-  private async ensureAccess(user: AuthenticatedUser, record: RawCompanyDocument) {
+  private async ensureAccess(
+    user: AuthenticatedUser,
+    record: RawCompanyDocument,
+  ) {
     assertCompanyAccess(user, record.companyId);
   }
 
@@ -119,10 +121,11 @@ export class CompanyDocumentsService {
     try {
       await new Promise<void>((resolvePromise, rejectPromise) => {
         const processHandle = spawn(
-          "python3",
+          getPythonCommand(),
           [this.docxGeneratorScriptPath, outputPath],
           {
             cwd: this.workspaceRoot,
+            env: getPythonProcessEnv(),
             stdio: ["pipe", "ignore", "pipe"],
           },
         );
@@ -130,7 +133,7 @@ export class CompanyDocumentsService {
         let stderrOutput = "";
 
         processHandle.stderr.on("data", (chunk) => {
-          stderrOutput += chunk.toString();
+          stderrOutput += chunk.toString("utf8");
         });
 
         processHandle.on("error", (error) => {
@@ -152,19 +155,22 @@ export class CompanyDocumentsService {
         });
 
         processHandle.stdin.write(
-          JSON.stringify({
-            companyName: record.company.name,
-            category: record.category,
-            documentName: record.documentName,
-            title: record.title,
-            summary: record.summary,
-            body: record.body,
-            issueDate: record.issueDate?.toISOString() ?? null,
-            status: record.status,
-            createdByUserName: record.createdByUser.fullName,
-            createdAt: record.createdAt.toISOString(),
-            updatedAt: record.updatedAt.toISOString(),
-          }),
+          Buffer.from(
+            JSON.stringify({
+              companyName: record.company.name,
+              category: record.category,
+              documentName: record.documentName,
+              title: record.title,
+              summary: record.summary,
+              body: record.body,
+              issueDate: record.issueDate?.toISOString() ?? null,
+              status: record.status,
+              createdByUserName: record.createdByUser.fullName,
+              createdAt: record.createdAt.toISOString(),
+              updatedAt: record.updatedAt.toISOString(),
+            }),
+            "utf8",
+          ),
         );
         processHandle.stdin.end();
       });

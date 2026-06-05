@@ -348,18 +348,41 @@ export class BriefingRecordsService {
       }
     }
 
-    const employeesWithoutSelfService = employees.filter(
-      (employee) => employee.user?.role !== "EMPLOYEE_SIGNER" || !employee.user.isActive,
-    );
+  }
 
-    if (employeesWithoutSelfService.length > 0) {
-      const employeeLabels = employeesWithoutSelfService
-        .map((employee) => `${employee.fullName} (${employee.employeeNumber})`)
-        .join(", ");
+  private hasEmployeeSignerAccount(employee: EmployeeRef | undefined) {
+    return employee?.user?.role === "EMPLOYEE_SIGNER" && employee.user.isActive;
+  }
 
+  private assertEmployeeSigningAccountReady(employee: EmployeeRef | undefined) {
+    if (this.hasEmployeeSignerAccount(employee)) {
+      return;
+    }
+
+    if (!employee) {
+      throw new BadRequestException("Сотрудник инструктажа не найден.");
+    }
+
+    if (!employee.user) {
       throw new BadRequestException(
-        `Перед назначением инструктажа создайте активный личный кабинет сотрудника: ${employeeLabels}.`,
+        `Перед подготовкой к подписи создайте личный кабинет сотрудника: ${employee.fullName} (${employee.employeeNumber}).`,
       );
+    }
+
+    if (employee.user.role !== "EMPLOYEE_SIGNER") {
+      throw new BadRequestException(
+        `Текущий кабинет ${employee.fullName} не является кабинетом сотрудника. Для подписи нужен активный кабинет с ролью EMPLOYEE_SIGNER.`,
+      );
+    }
+
+    throw new BadRequestException(
+      `Перед подготовкой к подписи активируйте личный кабинет сотрудника: ${employee.fullName} (${employee.employeeNumber}).`,
+    );
+  }
+
+  private assertEmployeeSigningAccountsReady(employees: EmployeeRef[]) {
+    for (const employee of employees) {
+      this.assertEmployeeSigningAccountReady(employee);
     }
   }
 
@@ -1058,6 +1081,9 @@ export class BriefingRecordsService {
           (employee?.departmentId ? refs.departments.get(employee.departmentId)?.name : null) ??
           department?.name ??
           null,
+        hasAccount: Boolean(employee?.user),
+        accountRole: employee?.user?.role ?? null,
+        hasEmployeeSignerAccount: this.hasEmployeeSignerAccount(employee),
       },
       instructor: {
         userId: entry.instructorUserId,
@@ -1355,6 +1381,9 @@ export class BriefingRecordsService {
       briefingType: input.briefingType,
     });
     this.assertCreateInputAllowed(user, policy, input, employees, journalKind);
+    if (input.status === "SIGNING_READY" || input.status === "READY_FOR_SIGNING") {
+      this.assertEmployeeSigningAccountsReady(employees);
+    }
     await Promise.all([
       this.ensureInstructor(organizationId, input.instructorUserId),
       this.ensureDepartment(
@@ -1551,6 +1580,7 @@ export class BriefingRecordsService {
     const refs = await this.resolveScopeRefs(existing.organizationId, [existing]);
     const policy = await this.resolvePersonaPolicy(user);
     this.assertCanOperateOnEntry(user, policy, existing, refs);
+    this.assertEmployeeSigningAccountReady(refs.employees.get(existing.employeeId));
 
     const alreadyPrepared =
       this.normalizeStatus(existing.status) === "SIGNING_READY" &&

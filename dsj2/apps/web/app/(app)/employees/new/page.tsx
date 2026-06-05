@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, PageHeader } from "@dsj/ui";
+import { Card, CardContent, CardHeader, EmptyState, PageHeader } from "@dsj/ui";
 import { redirect } from "next/navigation";
 import { createEmployeeAction } from "../../../../actions/employee";
 import { EmployeeEditorForm } from "../../../../components/employee-editor-form";
@@ -31,11 +31,51 @@ export default async function NewEmployeePage({
     searchParams: params,
   });
 
+  if (!activeCompanyId) {
+    return (
+      <div className="space-y-6">
+        {errorMessage ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {errorMessage}
+          </div>
+        ) : null}
+
+        <PageHeader>
+          <div>
+            <p className="text-sm uppercase tracking-[0.18em] text-slate-400">
+              Новый сотрудник
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold text-slate-950">
+              Создать карточку сотрудника
+            </h1>
+            <p className="mt-2 text-sm text-slate-500">
+              Для создания сотрудника нужно работать в области конкретной
+              компании.
+            </p>
+          </div>
+        </PageHeader>
+
+        <Card className="rounded-[24px]">
+          <CardContent className="pt-6">
+            <EmptyState className="min-h-40 justify-center text-left">
+              Выберите компанию в переключателе компании, затем вернитесь к
+              созданию сотрудника.
+            </EmptyState>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const scopedQuery = activeCompanyId ? `?companyId=${activeCompanyId}` : "";
   const [departments, positions, contractorCompanies] = await Promise.all([
     apiFetch<Array<{ id: string; name: string }>>(`departments${scopedQuery}`),
-    apiFetch<Array<{ id: string; code: string; name: string }>>(`core-platform/positions${scopedQuery}`),
-    apiFetch<Array<{ id: string; name: string }>>(`contractor-companies${scopedQuery}`),
+    apiFetch<Array<{ id: string; code: string; name: string }>>(
+      `core-platform/positions${scopedQuery}`,
+    ),
+    apiFetch<Array<{ id: string; name: string }>>(
+      `contractor-companies${scopedQuery}`,
+    ),
   ]);
 
   return (
@@ -48,18 +88,25 @@ export default async function NewEmployeePage({
 
       <PageHeader>
         <div>
-          <p className="text-sm uppercase tracking-[0.18em] text-slate-400">Новый сотрудник</p>
-          <h1 className="mt-2 text-3xl font-semibold text-slate-950">Создать карточку сотрудника</h1>
+          <p className="text-sm uppercase tracking-[0.18em] text-slate-400">
+            Новый сотрудник
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold text-slate-950">
+            Создать карточку сотрудника
+          </h1>
           <p className="mt-2 text-sm text-slate-500">
-            Создайте сотрудника в отдельной карточке. Фото необязательно, но если его загрузить,
-            оно автоматически подтянется в редактор шаблонов удостоверений.
+            Создайте сотрудника в отдельной карточке. Фото необязательно, но
+            если его загрузить, оно автоматически подтянется в редактор шаблонов
+            удостоверений.
           </p>
         </div>
       </PageHeader>
 
       <Card className="rounded-[24px]">
         <CardHeader>
-          <h2 className="text-lg font-semibold text-slate-950">Данные сотрудника</h2>
+          <h2 className="text-lg font-semibold text-slate-950">
+            Данные сотрудника
+          </h2>
         </CardHeader>
         <CardContent>
           <EmployeeEditorForm

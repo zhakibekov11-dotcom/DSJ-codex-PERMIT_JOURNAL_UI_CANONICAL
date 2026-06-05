@@ -25,6 +25,8 @@ import {
   assertPythonModuleAvailable,
   assertPython3Available,
   assertReadablePath,
+  getPythonCommand,
+  getPythonProcessEnv,
 } from "../common/utils/runtime-dependencies";
 import { requireCompanyScope } from "../common/utils/tenant-scope";
 import {
@@ -1787,10 +1789,11 @@ export class BiotCardsService {
     try {
       await new Promise<void>((resolvePromise, rejectPromise) => {
         const processHandle = spawn(
-          "python3",
+          getPythonCommand(),
           [this.generatorScriptPath, templatePath, outputPath],
           {
             cwd: this.workspaceRoot,
+            env: getPythonProcessEnv(),
             stdio: ["pipe", "ignore", "pipe"],
           },
         );
@@ -1798,7 +1801,7 @@ export class BiotCardsService {
         let stderrOutput = "";
 
         processHandle.stderr.on("data", (chunk) => {
-          stderrOutput += chunk.toString();
+          stderrOutput += chunk.toString("utf8");
         });
 
         processHandle.on("error", (error) => {
@@ -1820,15 +1823,18 @@ export class BiotCardsService {
         });
 
         processHandle.stdin.write(
-          JSON.stringify({
-            fields,
-            textReplacements,
-            fieldStyleOverrides: this.getFieldStyleOverrides(certificateType),
-            photo:
-              certificateType !== undefined
-                ? this.buildPhotoRenderPayload(certificateType, photo ?? null)
-                : null,
-          }),
+          Buffer.from(
+            JSON.stringify({
+              fields,
+              textReplacements,
+              fieldStyleOverrides: this.getFieldStyleOverrides(certificateType),
+              photo:
+                certificateType !== undefined
+                  ? this.buildPhotoRenderPayload(certificateType, photo ?? null)
+                  : null,
+            }),
+            "utf8",
+          ),
         );
         processHandle.stdin.end();
       });
@@ -1887,7 +1893,7 @@ export class BiotCardsService {
     try {
       await new Promise<void>((resolvePromise, rejectPromise) => {
         const processHandle = spawn(
-          "python3",
+          getPythonCommand(),
           [
             this.psWitnessCertificateScriptPath,
             this.getPsWitnessCertificateTemplatePath(),
@@ -1895,6 +1901,7 @@ export class BiotCardsService {
           ],
           {
             cwd: this.workspaceRoot,
+            env: getPythonProcessEnv(),
             stdio: ["pipe", "ignore", "pipe"],
           },
         );
@@ -1902,7 +1909,7 @@ export class BiotCardsService {
         let stderrOutput = "";
 
         processHandle.stderr.on("data", (chunk) => {
-          stderrOutput += chunk.toString();
+          stderrOutput += chunk.toString("utf8");
         });
 
         processHandle.on("error", (error) => {
@@ -1924,9 +1931,12 @@ export class BiotCardsService {
         });
 
         processHandle.stdin.write(
-          JSON.stringify({
-            rows: rows.map((fields) => ({ fields })),
-          }),
+          Buffer.from(
+            JSON.stringify({
+              rows: rows.map((fields) => ({ fields })),
+            }),
+            "utf8",
+          ),
         );
         processHandle.stdin.end();
       });
@@ -2944,10 +2954,11 @@ export class BiotCardsService {
     try {
       await new Promise<void>((resolvePromise, rejectPromise) => {
         const processHandle = spawn(
-          "python3",
+          getPythonCommand(),
           [this.registryExportScriptPath, outputPath],
           {
             cwd: this.workspaceRoot,
+            env: getPythonProcessEnv(),
             stdio: ["pipe", "ignore", "pipe"],
           },
         );
@@ -2955,7 +2966,7 @@ export class BiotCardsService {
         let stderrOutput = "";
 
         processHandle.stderr.on("data", (chunk) => {
-          stderrOutput += chunk.toString();
+          stderrOutput += chunk.toString("utf8");
         });
 
         processHandle.on("error", (error) => {
@@ -2976,7 +2987,7 @@ export class BiotCardsService {
           );
         });
 
-        processHandle.stdin.write(JSON.stringify(payload));
+        processHandle.stdin.write(Buffer.from(JSON.stringify(payload), "utf8"));
         processHandle.stdin.end();
       });
 
@@ -2992,8 +3003,19 @@ export class BiotCardsService {
     }
   }
 
-  async exportRequestRegistry(user: AuthenticatedUser, requestId: string) {
-    const companyId = requireCompanyScope(user, undefined);
+  async exportRequestRegistry(
+    user: AuthenticatedUser,
+    requestId: string,
+    query: CardGenerationRequestQuery = {},
+  ) {
+    const companyId = requireCompanyScope(user, query.companyId);
+    return this.exportRequestRegistryForCompany(companyId, requestId);
+  }
+
+  private async exportRequestRegistryForCompany(
+    companyId: string,
+    requestId: string,
+  ) {
     const request = await this.ensureRequest(companyId, requestId);
     const buffer = await this.exportRegistryWorkbook({
       request: {
@@ -3066,8 +3088,19 @@ export class BiotCardsService {
     );
   }
 
-  async exportRequestCards(user: AuthenticatedUser, requestId: string) {
-    const companyId = requireCompanyScope(user, undefined);
+  async exportRequestCards(
+    user: AuthenticatedUser,
+    requestId: string,
+    query: CardGenerationRequestQuery = {},
+  ) {
+    const companyId = requireCompanyScope(user, query.companyId);
+    return this.exportRequestCardsForCompany(companyId, requestId);
+  }
+
+  private async exportRequestCardsForCompany(
+    companyId: string,
+    requestId: string,
+  ) {
     const request = await this.ensureRequest(companyId, requestId);
     const bundleOptions = this.resolveBundleOptions({
       certificateType: request.certificateType,
@@ -3235,8 +3268,19 @@ export class BiotCardsService {
     };
   }
 
-  async exportRequestProtocol(user: AuthenticatedUser, requestId: string) {
-    const companyId = requireCompanyScope(user, undefined);
+  async exportRequestProtocol(
+    user: AuthenticatedUser,
+    requestId: string,
+    query: CardGenerationRequestQuery = {},
+  ) {
+    const companyId = requireCompanyScope(user, query.companyId);
+    return this.exportRequestProtocolForCompany(companyId, requestId);
+  }
+
+  private async exportRequestProtocolForCompany(
+    companyId: string,
+    requestId: string,
+  ) {
     const request = await this.ensureRequest(companyId, requestId);
     const bundleOptions = this.resolveBundleOptions({
       certificateType: request.certificateType,
@@ -3331,8 +3375,19 @@ export class BiotCardsService {
     };
   }
 
-  async exportRequestWitness(user: AuthenticatedUser, requestId: string) {
-    const companyId = requireCompanyScope(user, undefined);
+  async exportRequestWitness(
+    user: AuthenticatedUser,
+    requestId: string,
+    query: CardGenerationRequestQuery = {},
+  ) {
+    const companyId = requireCompanyScope(user, query.companyId);
+    return this.exportRequestWitnessForCompany(companyId, requestId);
+  }
+
+  private async exportRequestWitnessForCompany(
+    companyId: string,
+    requestId: string,
+  ) {
     const request = await this.ensureRequest(companyId, requestId);
     const bundleOptions = this.resolveBundleOptions({
       certificateType: request.certificateType,
@@ -3717,10 +3772,11 @@ export class BiotCardsService {
     try {
       await new Promise<void>((resolvePromise, rejectPromise) => {
         const processHandle = spawn(
-          "python3",
+          getPythonCommand(),
           [this.mailMergeBundleScriptPath, args.templatePath, outputPath],
           {
             cwd: this.workspaceRoot,
+            env: getPythonProcessEnv(),
             stdio: ["pipe", "ignore", "pipe"],
           },
         );
@@ -3728,7 +3784,7 @@ export class BiotCardsService {
         let stderrOutput = "";
 
         processHandle.stderr.on("data", (chunk) => {
-          stderrOutput += chunk.toString();
+          stderrOutput += chunk.toString("utf8");
         });
 
         processHandle.on("error", (error) => {
@@ -3750,19 +3806,22 @@ export class BiotCardsService {
         });
 
         processHandle.stdin.write(
-          JSON.stringify({
-            rows: args.rows.map((row) => ({
-              fields: row.fields,
-              textReplacements: row.textReplacements ?? [],
-              fieldStyleOverrides: this.getFieldStyleOverrides(
-                args.certificateType,
-              ),
-              photo: this.buildPhotoRenderPayload(
-                args.certificateType,
-                row.photo,
-              ),
-            })),
-          }),
+          Buffer.from(
+            JSON.stringify({
+              rows: args.rows.map((row) => ({
+                fields: row.fields,
+                textReplacements: row.textReplacements ?? [],
+                fieldStyleOverrides: this.getFieldStyleOverrides(
+                  args.certificateType,
+                ),
+                photo: this.buildPhotoRenderPayload(
+                  args.certificateType,
+                  row.photo,
+                ),
+              })),
+            }),
+            "utf8",
+          ),
         );
         processHandle.stdin.end();
       });
@@ -4049,10 +4108,10 @@ export class BiotCardsService {
     await this.logArtifacts(user, companyId, preparedItems, request.id);
 
     const exportResult = bundleOptions.includeCard
-      ? await this.exportRequestCards(user, request.id)
+      ? await this.exportRequestCardsForCompany(companyId, request.id)
       : bundleOptions.includeWitness
-        ? await this.exportRequestWitness(user, request.id)
-        : await this.exportRequestProtocol(user, request.id);
+        ? await this.exportRequestWitnessForCompany(companyId, request.id)
+        : await this.exportRequestProtocolForCompany(companyId, request.id);
 
     return {
       ...exportResult,

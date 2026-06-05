@@ -7,6 +7,7 @@ type EmployeeCandidate = {
   fullName: string;
   employeeNumber: string;
   employeeKind: string;
+  hasAccount?: boolean;
   accountEmail?: string | null;
   accountRole?: string | null;
   hasEmployeeSignerAccount?: boolean;
@@ -36,10 +37,6 @@ function matchesDemoPersonaScope(
     employee.department?.name === persona.scopeDepartmentName &&
     employee.site?.name === persona.scopeSiteName
   );
-}
-
-function canCompleteEmployeeSignature(employee: EmployeeCandidate) {
-  return employee.hasEmployeeSignerAccount === true;
 }
 
 export async function GET(request: Request) {
@@ -82,9 +79,7 @@ export async function GET(request: Request) {
     { token },
   );
   const persona = getDemoPersonaForEmail(user.email);
-  const candidates = employees
-    .filter((employee) => matchesDemoPersonaScope(employee, persona))
-    .filter(canCompleteEmployeeSignature);
+  const candidates = employees.filter((employee) => matchesDemoPersonaScope(employee, persona));
 
   return NextResponse.json(candidates, {
     headers: {

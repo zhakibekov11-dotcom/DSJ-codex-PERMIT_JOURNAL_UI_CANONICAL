@@ -1,4 +1,5 @@
 import { Input, Select, Textarea } from "@dsj/ui";
+import Link from "next/link";
 import { responsibilityTypeLabels } from "../lib/labels";
 import { ResponsibilityAppointmentPicker } from "./responsibility-appointment-picker";
 import { SubmitButton } from "./submit-button";
@@ -26,6 +27,7 @@ type ResponsibilityOrderDraftFormProps = {
   branches: ScopeOption[];
   departments: ScopeOption[];
   workSites: ScopeOption[];
+  workSitesManageHref?: string;
   initialValues?: {
     number?: string;
     date?: string;
@@ -59,6 +61,7 @@ export function ResponsibilityOrderDraftForm({
   branches,
   departments,
   workSites,
+  workSitesManageHref,
   initialValues,
   replacementMode = false,
   submitLabel,
@@ -160,6 +163,14 @@ export function ResponsibilityOrderDraftForm({
             </option>
           ))}
         </Select>
+        {!workSites.length && workSitesManageHref ? (
+          <p className="text-xs text-amber-700">
+            Справочник пуст.{" "}
+            <Link href={workSitesManageHref} className="font-medium underline">
+              Создать рабочую площадку
+            </Link>
+          </p>
+        ) : null}
         <p className="text-xs text-slate-500">
           Выберите только один уровень области. Оставьте все поля пустыми, если документ действует
           на уровне организации.

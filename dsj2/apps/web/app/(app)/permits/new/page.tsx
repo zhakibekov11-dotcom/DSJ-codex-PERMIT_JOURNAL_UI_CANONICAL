@@ -5,6 +5,7 @@ import { PermitEntryForm } from "@/components/permit-entry-form";
 import { requireRoleAccess } from "@/lib/auth";
 import { resolveCompanyContext } from "@/lib/company-context";
 import { fetchPermitFormOptions } from "@/lib/permit-queries";
+import { buildWorkSitesManageHref } from "@/lib/safe-return-path";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -23,6 +24,7 @@ export default async function NewPermitPage({ searchParams }: { searchParams: Se
     searchParams: params,
   });
   const options = await fetchPermitFormOptions(activeCompanyId ?? session.user.companyId ?? null);
+  const effectiveCompanyId = activeCompanyId ?? session.user.companyId ?? null;
 
   return (
     <div className="space-y-6">
@@ -60,6 +62,10 @@ export default async function NewPermitPage({ searchParams }: { searchParams: Se
             employees={options.employees}
             departments={options.departments}
             workSites={options.workSites}
+            workSitesManageHref={buildWorkSitesManageHref(
+              effectiveCompanyId,
+              `/permits/new${effectiveCompanyId ? `?companyId=${effectiveCompanyId}` : ""}`,
+            )}
             contractors={options.contractors}
             submitLabel="Создать допуск"
             pendingLabel="Создание допуска..."

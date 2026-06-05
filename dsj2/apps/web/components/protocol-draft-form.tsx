@@ -1,4 +1,5 @@
 import { Input, Select, Textarea } from "@dsj/ui";
+import Link from "next/link";
 import { BriefingParticipantPicker } from "./briefing-participant-picker";
 import { SubmitButton } from "./submit-button";
 
@@ -32,6 +33,7 @@ type ProtocolDraftFormProps = {
   employees: EmployeeOption[];
   departments: DepartmentOption[];
   workSites: WorkSiteOption[];
+  workSitesManageHref?: string;
   initialValues?: {
     number?: string;
     date?: string;
@@ -57,6 +59,7 @@ export function ProtocolDraftForm({
   employees,
   departments,
   workSites,
+  workSitesManageHref,
   initialValues,
   replacementMode = false,
   submitLabel,
@@ -136,6 +139,14 @@ export function ProtocolDraftForm({
             </option>
           ))}
         </Select>
+        {!workSites.length && workSitesManageHref ? (
+          <p className="text-xs text-amber-700">
+            Справочник пуст.{" "}
+            <Link href={workSitesManageHref} className="font-medium underline">
+              Создать рабочую площадку
+            </Link>
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-1.5">

@@ -1,7 +1,7 @@
 import { getApiUrl, getSessionToken } from "../../../../../../lib/api";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const token = await getSessionToken();
@@ -11,15 +11,20 @@ export async function GET(
   }
 
   const { id } = await params;
-  const response = await fetch(getApiUrl(`biot-cards/requests/${id}/export-registry`), {
-    headers: {
-      Authorization: `Bearer ${token}`,
+  const url = new URL(request.url);
+  const response = await fetch(
+    `${getApiUrl(`biot-cards/requests/${id}/export-registry`)}${url.search ? url.search : ""}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
     },
-    cache: "no-store",
-  });
+  );
 
   const body = await response.arrayBuffer();
-  const contentType = response.headers.get("Content-Type") ?? "text/plain; charset=utf-8";
+  const contentType =
+    response.headers.get("Content-Type") ?? "text/plain; charset=utf-8";
   const disposition = response.headers.get("Content-Disposition");
 
   return new Response(body, {

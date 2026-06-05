@@ -54,6 +54,9 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot,
   experimental: {
     devtoolSegmentExplorer: false,
+    serverActions: {
+      bodySizeLimit: "11mb",
+    },
   },
   eslint: {
     ignoreDuringBuilds: true,

@@ -20,6 +20,11 @@ const employeeUser: AuthenticatedUser = {
   role: "EMPLOYEE_SIGNER",
 };
 
+const instructorAdminUser: AuthenticatedUser = {
+  ...adminUser,
+  userId: "user-instructor-1",
+};
+
 function createInput(overrides: Record<string, unknown> = {}) {
   return {
     companyId: "company-1",
@@ -303,6 +308,137 @@ test("briefing create accepts same-company employee-derived department and site"
     workSiteId: "site-2",
     documentHash: null,
   });
+});
+
+test("briefing draft can be created before an employee account exists", async () => {
+  const { service, state } = createService({
+    employees: [
+      createEmployee({
+        userId: null,
+        user: null,
+      }),
+    ],
+  });
+
+  await service.create(adminUser, createInput() as never);
+
+  assert.equal(state.briefingCreateData.length, 1);
+  assert.equal(state.briefingCreateData[0]?.status, "DRAFT");
+});
+
+test("signing-ready create rejects a missing employee account before writing entries", async () => {
+  const { service, state } = createService({
+    employees: [
+      createEmployee({
+        userId: null,
+        user: null,
+      }),
+    ],
+  });
+
+  await assert.rejects(
+    () =>
+      service.create(
+        adminUser,
+        createInput({
+          status: "SIGNING_READY",
+        }) as never,
+      ),
+    (error) =>
+      error instanceof BadRequestException &&
+      error.message.includes("создайте личный кабинет сотрудника"),
+  );
+
+  assert.equal(state.briefingCreateData.length, 0);
+});
+
+test("shop-chief persona scope still rejects employees from another department or site", async () => {
+  const { service, state } = createService({
+    employees: [
+      createEmployee({
+        departmentId: "department-2",
+        siteId: "site-2",
+      }),
+    ],
+  });
+  (service as any).resolvePersonaPolicy = async () => ({
+    key: "shop-chief",
+    readOnly: false,
+    allowedBriefingTypes: ["PRIMARY"],
+    scopeDepartmentId: "department-1",
+    scopeSiteId: "site-1",
+  });
+
+  await assert.rejects(
+    () =>
+      service.create(
+        instructorAdminUser,
+        createInput({
+          briefingType: "PRIMARY",
+        }) as never,
+      ),
+    /scoped department and site/,
+  );
+
+  assert.equal(state.briefingCreateData.length, 0);
+});
+
+test("prepare for signing rejects a draft without an employee account before artifacts", async () => {
+  const employee = createEmployee({
+    userId: null,
+    user: null,
+  });
+  const { service, state } = createService({
+    employees: [employee],
+    existingRecord: createExistingRecord({
+      employee,
+    }),
+  });
+  (service as any).resolveScopeRefs = async () => ({
+    employees: new Map([["employee-1", employee]]),
+    instructors: new Map(),
+    departments: new Map(),
+    workSites: new Map(),
+  });
+
+  await assert.rejects(
+    () => service.prepareForSigning(instructorAdminUser, "record-1"),
+    (error) =>
+      error instanceof BadRequestException &&
+      error.message.includes("создайте личный кабинет сотрудника"),
+  );
+
+  assert.equal(state.briefingUpdateData.length, 0);
+});
+
+test("active EMPLOYEE_SIGNER account passes the preparation account guard", async () => {
+  const employee = createEmployee();
+  const { service } = createService({
+    employees: [employee],
+    existingRecord: createExistingRecord({
+      employee,
+    }),
+  });
+  let envelopeCalls = 0;
+  (service as any).resolveScopeRefs = async () => ({
+    employees: new Map([["employee-1", employee]]),
+    instructors: new Map(),
+    departments: new Map(),
+    workSites: new Map(),
+  });
+  (service as any).corePlatformService = {
+    createDocumentEnvelope: async () => {
+      envelopeCalls += 1;
+      throw new Error("core-platform-reached");
+    },
+  };
+
+  await assert.rejects(
+    () => service.prepareForSigning(instructorAdminUser, "record-1"),
+    /core-platform-reached/,
+  );
+
+  assert.equal(envelopeCalls, 1);
 });
 
 test("employee briefing details expose documentHash for NCALayer signing", async () => {

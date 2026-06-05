@@ -54,7 +54,7 @@ export const createEmployeeSchema = z.object({
   iin: z.string().min(12).max(12),
   employeeNumber: z.string().min(2),
   jobTitle: z.string().min(2),
-  jobTitleKz: z.string().min(2),
+  jobTitleKz: z.string().min(2).nullable().optional(),
   photoDataUrl: employeePhotoDataUrlSchema.nullable().optional(),
   photoFileName: z.string().max(255).nullable().optional(),
   email: z.string().email().nullable().optional(),

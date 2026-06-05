@@ -32,6 +32,10 @@ IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relation
 W = f"{{{WORD_NS}}}"
 
 
+def read_json_stdin() -> object:
+    return json.loads(sys.stdin.buffer.read().decode("utf-8"))
+
+
 def normalize_value(value: object) -> str:
     if value is None:
         return ""
@@ -274,7 +278,7 @@ def main() -> int:
         return 1
 
     try:
-        rows = validate_payload(json.load(sys.stdin))
+        rows = validate_payload(read_json_stdin())
         build_preview_document(template_path, output_path, rows)
     except Exception as error:  # noqa: BLE001
         print(str(error), file=sys.stderr)

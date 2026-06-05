@@ -31,6 +31,7 @@ import {
   getBriefingSignerRoleLabel,
 } from "@/lib/labels";
 import { getSigningConfig } from "@/lib/signing-config";
+import { getEmployeeSigningReadiness } from "@/lib/employee-signing-readiness";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -139,6 +140,12 @@ export default async function BriefingDetailPage({
   const query = companyQuery(record.organizationId);
   const signingConfigError = signingConfig.isConfigured ? null : signingConfig.configError;
   const employeeSigner = signerState(record, "BRIEFED_EMPLOYEE");
+  const employeeSigningReadiness = getEmployeeSigningReadiness(record.employee);
+  const employeeEditParams = new URLSearchParams({
+    companyId: record.organizationId,
+    returnTo: `/journal/${record.id}${query}`,
+  });
+  const employeeEditHref = `/employees/${record.employeeId}/edit?${employeeEditParams.toString()}`;
   const employeeInstructionUrl = `${appOriginFromHeaders(requestHeaders)}/my-instructions/${record.id}`;
   const canShowEmployeePresencePanel = Boolean(record.signingDigest && employeeSigner);
   const hasActionContent =
@@ -293,14 +300,31 @@ export default async function BriefingDetailPage({
             </CardHeader>
             <CardContent className="space-y-3">
               {record.allowedActions.canPrepareSign ? (
-                <form action={prepareBriefingForSigningAction}>
-                  <input type="hidden" name="briefingId" value={record.id} />
-                  <input type="hidden" name="companyId" value={record.organizationId} />
-                  <SubmitButton
-                    label="Подготовить к подписи"
-                    pendingLabel="Подготовка..."
-                  />
-                </form>
+                <>
+                  {employeeSigningReadiness.key !== "ready" ? (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                      <p className="font-medium">Подготовка к подписи недоступна</p>
+                      <p className="mt-1">{employeeSigningReadiness.label}.</p>
+                      <Link
+                        href={employeeEditHref}
+                        className="mt-3 inline-flex rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-900"
+                      >
+                        {employeeSigningReadiness.key === "missing-account"
+                          ? "Создать кабинет сотрудника"
+                          : "Проверить кабинет сотрудника"}
+                      </Link>
+                    </div>
+                  ) : null}
+                  <form action={prepareBriefingForSigningAction}>
+                    <input type="hidden" name="briefingId" value={record.id} />
+                    <input type="hidden" name="companyId" value={record.organizationId} />
+                    <SubmitButton
+                      label="Подготовить к подписи"
+                      pendingLabel="Подготовка..."
+                      disabled={employeeSigningReadiness.key !== "ready"}
+                    />
+                  </form>
+                </>
               ) : null}
 
               {canShowEmployeePresencePanel ? (

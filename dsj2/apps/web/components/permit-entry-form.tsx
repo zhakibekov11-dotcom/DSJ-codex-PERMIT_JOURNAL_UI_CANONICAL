@@ -1,4 +1,5 @@
 import { Input, Select, Textarea } from "@dsj/ui";
+import Link from "next/link";
 import {
   getPermitTypeLabel,
   getPermitWorkTypeLabel,
@@ -16,6 +17,7 @@ type PermitEntryFormProps = {
   employees: PermitOption[];
   departments: PermitOption[];
   workSites: PermitOption[];
+  workSitesManageHref?: string;
   contractors: PermitOption[];
   initialValues?: PermitEntry | null;
   submitLabel: string;
@@ -37,6 +39,7 @@ export function PermitEntryForm({
   employees,
   departments,
   workSites,
+  workSitesManageHref,
   contractors,
   initialValues,
   submitLabel,
@@ -125,6 +128,14 @@ export function PermitEntryForm({
             </option>
           ))}
         </Select>
+        {!locked && !workSites.length && workSitesManageHref ? (
+          <p className="text-xs text-amber-700">
+            Справочник пуст.{" "}
+            <Link href={workSitesManageHref} className="font-medium underline">
+              Создать рабочую площадку
+            </Link>
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-1.5">

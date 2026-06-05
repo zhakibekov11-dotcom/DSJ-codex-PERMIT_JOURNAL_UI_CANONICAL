@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 
 function findWorkspaceRoot(startDir: string) {
@@ -25,8 +26,9 @@ function findWorkspaceRoot(startDir: string) {
 }
 
 const workspaceRoot = findWorkspaceRoot(process.cwd());
+const pythonCommand = process.env.PYTHON_BIN?.trim() || "python3";
 
-const pythonProbe = spawnSync("python3", ["--version"], {
+const pythonProbe = spawnSync(pythonCommand, ["--version"], {
   cwd: workspaceRoot,
   encoding: "utf8",
 });
@@ -37,7 +39,7 @@ const pythonSkipReason =
     : false;
 
 function runPython(script: string) {
-  const result = spawnSync("python3", ["-c", script], {
+  const result = spawnSync(pythonCommand, ["-c", script], {
     cwd: workspaceRoot,
     encoding: "utf8",
   });
@@ -49,6 +51,73 @@ function runPython(script: string) {
   assert.equal(result.status, 0, result.stderr || result.stdout);
   return result.stdout.trim();
 }
+
+function pythonEnvWithoutIoEncoding() {
+  const env = { ...process.env };
+  delete env.PYTHONIOENCODING;
+  delete env.PYTHONUTF8;
+  return env;
+}
+
+test(
+  "BIOT card CLI reads Unicode JSON stdin as UTF-8 without PYTHONIOENCODING",
+  { skip: pythonSkipReason },
+  () => {
+    const workingDirectory = mkdtempSync(join(tmpdir(), "dsj-biot-utf8-"));
+    const outputPath = resolve(workingDirectory, "biot-card.docx");
+
+    try {
+      const payload = {
+        fields: {
+          Берілді: "Әлихан Қасымов",
+          В_том_что_он: "прошел проверку знаний по безопасности и охране труда",
+          ГОД: "2026",
+          День_месяц: "05 июня",
+          Должность: "Инженер по безопасности",
+          Жұмыс__орны_: "ЖШС «Құрылыс Сервис»",
+          Лауазымы: "Қауіпсіздік инженері",
+          Место_работы__: "ТОО «Строй Сервис»",
+          Номер_серии: "DSJ",
+          Номер_удостоверения: "000123",
+          Протокол_: "№ 7 от 05.06.2026",
+          ФИО: "Әлихан Қасымов",
+        },
+        fieldStyleOverrides: {
+          ФИО: {
+            fontSize: 22,
+          },
+        },
+        photo: null,
+        textReplacements: [],
+      };
+
+      const result = spawnSync(
+        pythonCommand,
+        [
+          "scripts/generate_biot_card.py",
+          "docs/experimental/biot/biot-card-template.docx",
+          outputPath,
+        ],
+        {
+          cwd: workspaceRoot,
+          encoding: "utf8",
+          env: pythonEnvWithoutIoEncoding(),
+          input: Buffer.from(JSON.stringify(payload), "utf8"),
+        },
+      );
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      assert.equal(existsSync(outputPath), true);
+      assert.ok(statSync(outputPath).size > 0);
+    } finally {
+      rmSync(workingDirectory, { recursive: true, force: true });
+    }
+  },
+);
 
 test(
   "reserved auto-generated namespace prefixes no longer crash registration",

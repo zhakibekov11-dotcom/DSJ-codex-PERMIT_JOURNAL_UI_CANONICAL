@@ -57,6 +57,7 @@ export default async function NewBriefingPage({ searchParams }: { searchParams: 
         fullName: string;
         employeeNumber: string;
         employeeKind: string;
+        hasAccount?: boolean;
         accountEmail?: string | null;
         accountRole?: string | null;
         hasEmployeeSignerAccount?: boolean;
@@ -77,9 +78,7 @@ export default async function NewBriefingPage({ searchParams }: { searchParams: 
           employee.site?.name === currentDemoPersona.scopeSiteName,
       )
     : employees;
-  const participantCandidates = scopedEmployees.filter(
-    (employee) => employee.hasEmployeeSignerAccount === true,
-  );
+  const participantCandidates = scopedEmployees;
   const scopedDepartments = isShopChiefPersona
     ? departments.filter((department) => department.name === currentDemoPersona.scopeDepartmentName)
     : departments;
@@ -137,8 +136,9 @@ export default async function NewBriefingPage({ searchParams }: { searchParams: 
               <BriefingParticipantPicker
                 employees={participantCandidates}
                 searchEndpoint={participantSearchEndpoint}
-                availableDescription="Ищи по ФИО, табельному номеру, типу сотрудника или подрядной компании. В список попадают сотрудники с активным личным кабинетом для подписи."
-                availableEmptyState="Сотрудники с доступной подписью не найдены."
+                availableDescription="Ищи по ФИО, табельному номеру, типу сотрудника или подрядной компании. Черновик можно создать без личного кабинета."
+                availableEmptyState="Активные сотрудники не найдены."
+                showSigningReadiness
               />
             </div>
             <div className="space-y-1.5">

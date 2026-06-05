@@ -19,6 +19,8 @@ import {
   assertPythonModuleAvailable,
   assertPython3Available,
   assertReadablePath,
+  getPythonCommand,
+  getPythonProcessEnv,
   toRuntimeDependencyError,
 } from "../common/utils/runtime-dependencies";
 import {
@@ -196,10 +198,11 @@ export class CorrespondenceService {
     try {
       await new Promise<void>((resolvePromise, rejectPromise) => {
         const processHandle = spawn(
-          "python3",
+          getPythonCommand(),
           [this.docxGeneratorScriptPath, this.docxTemplatePath, outputPath],
           {
             cwd: this.workspaceRoot,
+            env: getPythonProcessEnv(),
             stdio: ["pipe", "ignore", "pipe"],
           },
         );
@@ -207,7 +210,7 @@ export class CorrespondenceService {
         let stderrOutput = "";
 
         processHandle.stderr.on("data", (chunk) => {
-          stderrOutput += chunk.toString();
+          stderrOutput += chunk.toString("utf8");
         });
 
         processHandle.on("error", (error) => {
@@ -229,13 +232,16 @@ export class CorrespondenceService {
         });
 
         processHandle.stdin.write(
-          JSON.stringify({
-            registryNumber: record.registryNumber,
-            issueDateRu: this.formatRuDate(record.sentAt ?? record.createdAt),
-            heading: record.subject,
-            body: record.body,
-            recipients: this.buildWordRecipients(record),
-          }),
+          Buffer.from(
+            JSON.stringify({
+              registryNumber: record.registryNumber,
+              issueDateRu: this.formatRuDate(record.sentAt ?? record.createdAt),
+              heading: record.subject,
+              body: record.body,
+              recipients: this.buildWordRecipients(record),
+            }),
+            "utf8",
+          ),
         );
         processHandle.stdin.end();
       });

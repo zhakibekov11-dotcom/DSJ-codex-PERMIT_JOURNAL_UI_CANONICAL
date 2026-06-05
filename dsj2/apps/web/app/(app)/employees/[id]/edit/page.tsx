@@ -5,6 +5,7 @@ import { EmployeeEditorForm } from "../../../../../components/employee-editor-fo
 import { apiFetch } from "../../../../../lib/api";
 import { requireRoleAccess } from "../../../../../lib/auth";
 import { getDemoPersonaForEmail } from "../../../../../lib/demo-personas";
+import { normalizeSafeReturnPath } from "../../../../../lib/safe-return-path";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -25,6 +26,7 @@ export default async function EditEmployeePage({
 
   const rawSearchParams = await searchParams;
   const errorMessage = typeof rawSearchParams.error === "string" ? rawSearchParams.error : null;
+  const returnTo = normalizeSafeReturnPath(rawSearchParams.returnTo);
 
   const employee = await apiFetch<{
     id: string;
@@ -84,6 +86,7 @@ export default async function EditEmployeePage({
             positions={positions}
             contractorCompanies={contractorCompanies}
             employee={employee}
+            returnTo={returnTo}
           />
         </CardContent>
       </Card>

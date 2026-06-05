@@ -5,6 +5,7 @@ import { PermitWorkflowNav } from "@/components/permit-summary";
 import { requireRoleAccess } from "@/lib/auth";
 import { fetchPermit, fetchPermitFormOptions } from "@/lib/permit-queries";
 import { getPermitEntry, isPermitLocked } from "@/lib/permits";
+import { buildWorkSitesManageHref } from "@/lib/safe-return-path";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -65,6 +66,12 @@ export default async function EditPermitPage({
             employees={options.employees}
             departments={options.departments}
             workSites={options.workSites}
+            workSitesManageHref={buildWorkSitesManageHref(
+              effectiveCompanyId,
+              `/permits/${permit.id}/edit${
+                effectiveCompanyId ? `?companyId=${effectiveCompanyId}` : ""
+              }`,
+            )}
             contractors={options.contractors}
             initialValues={entry}
             submitLabel="Сохранить новую версию"

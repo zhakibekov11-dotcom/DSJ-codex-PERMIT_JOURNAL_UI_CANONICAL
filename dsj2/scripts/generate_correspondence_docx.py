@@ -7,6 +7,10 @@ from pathlib import Path
 from docx import Document
 
 
+def read_json_stdin():
+    return json.loads(sys.stdin.buffer.read().decode("utf-8"))
+
+
 def remove_paragraph(paragraph):
     element = paragraph._element
     parent = element.getparent()
@@ -89,7 +93,7 @@ def main():
 
     template_path = Path(sys.argv[1])
     output_path = Path(sys.argv[2])
-    payload = json.load(sys.stdin)
+    payload = read_json_stdin()
 
     document = Document(template_path)
     paragraphs = list(document.paragraphs)

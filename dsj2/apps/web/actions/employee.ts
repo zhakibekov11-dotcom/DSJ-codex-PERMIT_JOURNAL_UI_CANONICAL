@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import sharp from "sharp";
 import { apiFetch } from "../lib/api";
+import { normalizeSafeReturnPath } from "../lib/safe-return-path";
 
 const ALLOWED_EMPLOYEE_PHOTO_TYPES = new Set(["image/jpeg", "image/png"]);
 const MAX_EMPLOYEE_PHOTO_SIZE_BYTES = 10 * 1024 * 1024;
@@ -38,7 +38,12 @@ function buildEmployeesSuccessUrl(companyId: string | null, success?: string) {
   return query ? `/employees?${query}` : "/employees";
 }
 
-function buildEditEmployeeUrl(employeeId: string, companyId: string | null, error?: string) {
+function buildEditEmployeeUrl(
+  employeeId: string,
+  companyId: string | null,
+  error?: string,
+  returnTo?: string | null,
+) {
   const params = new URLSearchParams();
 
   if (companyId) {
@@ -49,8 +54,14 @@ function buildEditEmployeeUrl(employeeId: string, companyId: string | null, erro
     params.set("error", error);
   }
 
+  if (returnTo) {
+    params.set("returnTo", returnTo);
+  }
+
   const query = params.toString();
-  return query ? `/employees/${employeeId}/edit?${query}` : `/employees/${employeeId}/edit`;
+  return query
+    ? `/employees/${employeeId}/edit?${query}`
+    : `/employees/${employeeId}/edit`;
 }
 
 function buildNewEmployeeUrl(companyId: string | null, error?: string) {
@@ -72,10 +83,30 @@ function toJpegFileName(value: string) {
   return value.replace(/\.[^.]+$/u, "") + ".jpg";
 }
 
+type UploadedPhotoFile = {
+  arrayBuffer: () => Promise<ArrayBuffer>;
+  name: string;
+  size: number;
+  type: string;
+};
+
+function isUploadedPhotoFile(
+  value: FormDataEntryValue | null,
+): value is File {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Partial<UploadedPhotoFile>).arrayBuffer === "function" &&
+    typeof (value as Partial<UploadedPhotoFile>).name === "string" &&
+    typeof (value as Partial<UploadedPhotoFile>).size === "number" &&
+    typeof (value as Partial<UploadedPhotoFile>).type === "string"
+  );
+}
+
 async function processEmployeePhoto(formData: FormData) {
   const fileValue = formData.get("employeePhoto");
 
-  if (!(fileValue instanceof File) || fileValue.size === 0) {
+  if (!isUploadedPhotoFile(fileValue) || fileValue.size === 0) {
     return null;
   }
 
@@ -89,6 +120,7 @@ async function processEmployeePhoto(formData: FormData) {
   }
 
   const sourceBuffer = Buffer.from(await fileValue.arrayBuffer());
+  const { default: sharp } = await import("sharp");
   const processedBuffer = await sharp(sourceBuffer)
     .rotate()
     .resize(180, 240, {
@@ -118,12 +150,13 @@ export async function createEmployeeAction(formData: FormData) {
         iin: String(formData.get("iin") ?? ""),
         employeeNumber: String(formData.get("employeeNumber") ?? ""),
         jobTitle: String(formData.get("jobTitle") ?? ""),
-        jobTitleKz: String(formData.get("jobTitleKz") ?? ""),
+        jobTitleKz: String(formData.get("jobTitleKz") ?? "").trim() || null,
         photoDataUrl: processedPhoto?.photoDataUrl ?? null,
         photoFileName: processedPhoto?.photoFileName ?? null,
         departmentId: String(formData.get("departmentId") ?? "") || null,
         positionId: String(formData.get("positionId") ?? "") || null,
-        contractorCompanyId: String(formData.get("contractorCompanyId") ?? "") || null,
+        contractorCompanyId:
+          String(formData.get("contractorCompanyId") ?? "") || null,
         email: String(formData.get("email") ?? "") || null,
         phone: String(formData.get("phone") ?? "") || null,
         employeeKind: String(formData.get("employeeKind") ?? "INTERNAL"),
@@ -136,7 +169,9 @@ export async function createEmployeeAction(formData: FormData) {
     redirect(
       buildNewEmployeeUrl(
         companyId,
-        error instanceof Error ? error.message : "Не удалось создать сотрудника.",
+        error instanceof Error
+          ? error.message
+          : "Не удалось создать сотрудника.",
       ),
     );
   }
@@ -151,7 +186,12 @@ export async function archiveEmployeeAction(formData: FormData) {
   const employeeId = String(formData.get("employeeId") ?? "");
 
   if (!employeeId) {
-    redirect(buildEmployeesRedirectUrl(companyId, "Не выбран сотрудник для увольнения."));
+    redirect(
+      buildEmployeesRedirectUrl(
+        companyId,
+        "Не выбран сотрудник для увольнения.",
+      ),
+    );
   }
 
   try {
@@ -165,21 +205,34 @@ export async function archiveEmployeeAction(formData: FormData) {
     redirect(
       buildEmployeesRedirectUrl(
         companyId,
-        error instanceof Error ? error.message : "Не удалось уволить сотрудника.",
+        error instanceof Error
+          ? error.message
+          : "Не удалось уволить сотрудника.",
       ),
     );
   }
 
   revalidatePath("/employees");
-  redirect(buildEmployeesSuccessUrl(companyId, "Сотрудник переведен в архив и убран из активного списка."));
+  redirect(
+    buildEmployeesSuccessUrl(
+      companyId,
+      "Сотрудник переведен в архив и убран из активного списка.",
+    ),
+  );
 }
 
 export async function updateEmployeeAction(formData: FormData) {
   const companyId = String(formData.get("companyId") ?? "") || null;
   const employeeId = String(formData.get("employeeId") ?? "");
+  const returnTo = normalizeSafeReturnPath(formData.get("returnTo"));
 
   if (!employeeId) {
-    redirect(buildEmployeesRedirectUrl(companyId, "Не выбран сотрудник для редактирования."));
+    redirect(
+      buildEmployeesRedirectUrl(
+        companyId,
+        "Не выбран сотрудник для редактирования.",
+      ),
+    );
   }
 
   try {
@@ -190,15 +243,17 @@ export async function updateEmployeeAction(formData: FormData) {
         companyId,
         fullName: String(formData.get("fullName") ?? "") || undefined,
         iin: String(formData.get("iin") ?? "") || undefined,
-        employeeNumber: String(formData.get("employeeNumber") ?? "") || undefined,
+        employeeNumber:
+          String(formData.get("employeeNumber") ?? "") || undefined,
         jobTitle: String(formData.get("jobTitle") ?? "") || undefined,
-        jobTitleKz: String(formData.get("jobTitleKz") ?? "") || undefined,
+        jobTitleKz: String(formData.get("jobTitleKz") ?? "").trim() || null,
         photoDataUrl: processedPhoto?.photoDataUrl,
         photoFileName: processedPhoto?.photoFileName,
         removePhoto: formData.get("removePhoto") === "on",
         departmentId: String(formData.get("departmentId") ?? "") || null,
         positionId: String(formData.get("positionId") ?? "") || null,
-        contractorCompanyId: String(formData.get("contractorCompanyId") ?? "") || null,
+        contractorCompanyId:
+          String(formData.get("contractorCompanyId") ?? "") || null,
         email: String(formData.get("email") ?? "") || null,
         phone: String(formData.get("phone") ?? "") || null,
         employeeKind: String(formData.get("employeeKind") ?? "") || undefined,
@@ -212,12 +267,19 @@ export async function updateEmployeeAction(formData: FormData) {
       buildEditEmployeeUrl(
         employeeId,
         companyId,
-        error instanceof Error ? error.message : "Не удалось обновить сотрудника.",
+        error instanceof Error
+          ? error.message
+          : "Не удалось обновить сотрудника.",
+        returnTo,
       ),
     );
   }
 
   revalidatePath("/employees");
   revalidatePath(`/employees/${employeeId}/edit`);
+  if (returnTo) {
+    revalidatePath(returnTo);
+    redirect(returnTo);
+  }
   redirect(buildEmployeesSuccessUrl(companyId, "Данные сотрудника обновлены."));
 }

@@ -728,6 +728,46 @@ function getRequestBundleLabel(request: CardGenerationRequestSummary) {
   return parts.length ? parts.join(", ") : null;
 }
 
+function buildScopedDownloadHref(path: string, companyId: string | null) {
+  if (!companyId) {
+    return path;
+  }
+
+  const params = new URLSearchParams({ companyId });
+  return `${path}?${params.toString()}`;
+}
+
+async function readResponseError(response: Response, fallback: string) {
+  const text = await response.text();
+
+  if (!text) {
+    return fallback;
+  }
+
+  try {
+    const payload = JSON.parse(text) as {
+      message?: string | string[];
+      error?: string;
+    };
+
+    if (Array.isArray(payload.message)) {
+      return payload.message.join(", ");
+    }
+
+    if (typeof payload.message === "string") {
+      return payload.message;
+    }
+
+    if (typeof payload.error === "string") {
+      return payload.error;
+    }
+  } catch {
+    return text;
+  }
+
+  return fallback;
+}
+
 function getTrainingSubjectLabel(certificateType: SafetyCardType) {
   if (certificateType === "PTM") {
     return "Поле «В том, что»";
@@ -1865,9 +1905,12 @@ export function BiotCardGenerator({
     );
 
     if (!response.ok) {
-      const message =
-        (await response.text()) || "Не удалось обновить шаблонные значения.";
-      throw new Error(message);
+      throw new Error(
+        await readResponseError(
+          response,
+          "Не удалось обновить шаблонные значения.",
+        ),
+      );
     }
 
     const nextDefaults = (await response.json()) as BiotCardDefaults;
@@ -1895,7 +1938,9 @@ export function BiotCardGenerator({
     );
 
     if (!response.ok) {
-      throw new Error("Не удалось обновить список заявок.");
+      throw new Error(
+        await readResponseError(response, "Не удалось обновить список заявок."),
+      );
     }
 
     const nextRequests =
@@ -1995,9 +2040,12 @@ export function BiotCardGenerator({
       );
 
       if (!response.ok) {
-        const message =
-          (await response.text()) || "Не удалось удалить сохранённую заявку.";
-        throw new Error(message);
+        throw new Error(
+          await readResponseError(
+            response,
+            "Не удалось удалить сохранённую заявку.",
+          ),
+        );
       }
 
       setSavedRequests((current) =>
@@ -4035,10 +4083,12 @@ export function BiotCardGenerator({
         );
 
         if (!response.ok) {
-          const message =
-            (await response.text()) ||
-            "Не удалось сохранить изменения в заявке.";
-          throw new Error(message);
+          throw new Error(
+            await readResponseError(
+              response,
+              "Не удалось сохранить изменения в заявке.",
+            ),
+          );
         }
 
         await response.json();
@@ -4067,10 +4117,12 @@ export function BiotCardGenerator({
         });
 
         if (!response.ok) {
-          const message =
-            (await response.text()) ||
-            `Не удалось сформировать заявку ${getCertificateTypeLabel(group.certificateType, group.biotDocumentKind)}.`;
-          throw new Error(message);
+          throw new Error(
+            await readResponseError(
+              response,
+              `Не удалось сформировать заявку ${getCertificateTypeLabel(group.certificateType, group.biotDocumentKind)}.`,
+            ),
+          );
         }
 
         await response.arrayBuffer();
@@ -5308,7 +5360,10 @@ export function BiotCardGenerator({
                                   request.biotDocumentKind ===
                                     "ITR_CERTIFICATE") ? (
                                   <a
-                                    href={`/api/biot-cards/requests/${request.id}/cards`}
+                                    href={buildScopedDownloadHref(
+                                      `/api/biot-cards/requests/${request.id}/cards`,
+                                      companyId,
+                                    )}
                                     className="inline-flex rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs font-medium text-[var(--ink)] transition-colors duration-150 hover:bg-[var(--surface-muted)]"
                                   >
                                     {getDocumentDownloadLabel(request)}
@@ -5349,7 +5404,10 @@ export function BiotCardGenerator({
                                   request.biotDocumentKind === "ITR_CERTIFICATE"
                                 ) ? (
                                   <a
-                                    href={`/api/biot-cards/requests/${request.id}/witness`}
+                                    href={buildScopedDownloadHref(
+                                      `/api/biot-cards/requests/${request.id}/witness`,
+                                      companyId,
+                                    )}
                                     className="inline-flex rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs font-medium text-[var(--ink)] transition-colors duration-150 hover:bg-[var(--surface-muted)]"
                                   >
                                     Свидетельство DOCX
@@ -5357,7 +5415,10 @@ export function BiotCardGenerator({
                                 ) : null}
                                 {request.protocolExportAvailable ? (
                                   <a
-                                    href={`/api/biot-cards/requests/${request.id}/protocol`}
+                                    href={buildScopedDownloadHref(
+                                      `/api/biot-cards/requests/${request.id}/protocol`,
+                                      companyId,
+                                    )}
                                     className="inline-flex rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs font-medium text-[var(--ink)] transition-colors duration-150 hover:bg-[var(--surface-muted)]"
                                   >
                                     Протокол DOCX

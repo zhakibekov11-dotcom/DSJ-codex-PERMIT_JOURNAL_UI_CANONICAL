@@ -5,6 +5,7 @@ import { ProtocolDraftForm } from "@/components/protocol-draft-form";
 import { apiFetch } from "@/lib/api";
 import { requireRoleAccess } from "@/lib/auth";
 import { resolveCompanyContext } from "@/lib/company-context";
+import { buildWorkSitesManageHref } from "@/lib/safe-return-path";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -65,6 +66,13 @@ export default async function NewProtocolPage({ searchParams }: { searchParams: 
 
   const chairman = replacementSource?.commission.find((member) => member.role === "CHAIRMAN") ?? null;
   const members = replacementSource?.commission.filter((member) => member.role === "MEMBER") ?? [];
+  const returnParams = new URLSearchParams();
+  if (effectiveCompanyId) returnParams.set("companyId", effectiveCompanyId);
+  if (replaceProtocolId) returnParams.set("replaceProtocolId", replaceProtocolId);
+  const workSitesManageHref = buildWorkSitesManageHref(
+    effectiveCompanyId,
+    `/protocols/new${returnParams.toString() ? `?${returnParams.toString()}` : ""}`,
+  );
 
   return (
     <div className="space-y-6">
@@ -117,6 +125,7 @@ export default async function NewProtocolPage({ searchParams }: { searchParams: 
             employees={employees}
             departments={departments}
             workSites={workSites}
+            workSitesManageHref={workSitesManageHref}
             initialValues={
               replacementSource
                 ? {

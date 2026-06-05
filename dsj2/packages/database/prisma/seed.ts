@@ -184,6 +184,27 @@ async function main() {
     },
   });
 
+  await Promise.all([
+    prisma.workSite.create({
+      data: {
+        id: "demo-work-site-west-14",
+        organizationId: alpinaOrganization.id,
+        code: "WEST-14",
+        name: westPad.name,
+        location: westPad.location,
+      },
+    }),
+    prisma.workSite.create({
+      data: {
+        id: "demo-work-site-atyrau-base",
+        organizationId: alpinaOrganization.id,
+        code: "ATYRAU-BASE",
+        name: atyrauBase.name,
+        location: atyrauBase.location,
+      },
+    }),
+  ]);
+
   const [
     directorPosition,
     safetyEngineerPosition,

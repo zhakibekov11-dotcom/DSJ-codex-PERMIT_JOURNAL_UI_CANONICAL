@@ -24,6 +24,10 @@ STATUS_LABELS = {
 }
 
 
+def read_json_stdin():
+    return json.loads(sys.stdin.buffer.read().decode("utf-8"))
+
+
 def format_ru_date(value):
     if not value:
         return "Не указана"
@@ -52,7 +56,7 @@ def main():
         sys.exit(1)
 
     output_path = Path(sys.argv[1])
-    payload = json.load(sys.stdin)
+    payload = read_json_stdin()
 
     document = Document()
     section = document.sections[0]

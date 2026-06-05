@@ -122,6 +122,9 @@ export const briefingEmployeeSchema = z.object({
   jobTitle: z.string().nullable().optional(),
   departmentId: z.string().nullable().optional(),
   departmentName: z.string().nullable().optional(),
+  hasAccount: z.boolean().default(false),
+  accountRole: z.string().nullable().optional(),
+  hasEmployeeSignerAccount: z.boolean().default(false),
 });
 
 export const briefingInstructorSchema = z.object({

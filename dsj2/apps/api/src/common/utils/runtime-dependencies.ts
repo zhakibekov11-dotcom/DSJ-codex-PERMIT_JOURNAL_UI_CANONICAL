@@ -2,10 +2,19 @@ import { InternalServerErrorException } from "@nestjs/common";
 import { spawn } from "node:child_process";
 import { access } from "node:fs/promises";
 
-export async function assertReadablePath(
-  path: string,
-  errorMessage: string,
-) {
+export function getPythonCommand() {
+  return process.env.PYTHON_BIN?.trim() || "python3";
+}
+
+export function getPythonProcessEnv() {
+  return {
+    ...process.env,
+    PYTHONIOENCODING: "utf-8",
+    PYTHONUTF8: process.env.PYTHONUTF8 ?? "1",
+  };
+}
+
+export async function assertReadablePath(path: string, errorMessage: string) {
   try {
     await access(path);
   } catch {
@@ -14,14 +23,18 @@ export async function assertReadablePath(
 }
 
 export async function assertPython3Available(errorMessage: string) {
-  await assertCommandSucceeds("python3", ["--version"], errorMessage);
+  await assertCommandSucceeds(getPythonCommand(), ["--version"], errorMessage);
 }
 
 export async function assertPythonModuleAvailable(
   moduleName: string,
   errorMessage: string,
 ) {
-  await assertCommandSucceeds("python3", ["-c", `import ${moduleName}`], errorMessage);
+  await assertCommandSucceeds(
+    getPythonCommand(),
+    ["-c", `import ${moduleName}`],
+    errorMessage,
+  );
 }
 
 async function assertCommandSucceeds(
@@ -32,6 +45,7 @@ async function assertCommandSucceeds(
   try {
     await new Promise<void>((resolve, reject) => {
       const processHandle = spawn(command, args, {
+        env: getPythonProcessEnv(),
         stdio: "ignore",
       });
 

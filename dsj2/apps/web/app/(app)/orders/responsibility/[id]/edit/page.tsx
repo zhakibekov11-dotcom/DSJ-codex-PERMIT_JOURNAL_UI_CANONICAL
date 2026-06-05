@@ -4,6 +4,7 @@ import { updateResponsibilityOrderAction } from "@/actions/responsibility-order"
 import { ResponsibilityOrderDraftForm } from "@/components/responsibility-order-draft-form";
 import { apiFetch } from "@/lib/api";
 import { requireRoleAccess } from "@/lib/auth";
+import { buildWorkSitesManageHref } from "@/lib/safe-return-path";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -131,6 +132,10 @@ export default async function EditResponsibilityOrderPage({
             branches={branches}
             departments={departments}
             workSites={workSites}
+            workSitesManageHref={buildWorkSitesManageHref(
+              effectiveCompanyId,
+              `/orders/responsibility/${order.id}/edit${scopedQuery}`,
+            )}
             initialValues={{
               number: order.number,
               date: order.date,

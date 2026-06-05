@@ -5,6 +5,7 @@ import { ResponsibilityOrderDraftForm } from "@/components/responsibility-order-
 import { apiFetch } from "@/lib/api";
 import { requireRoleAccess } from "@/lib/auth";
 import { resolveCompanyContext } from "@/lib/company-context";
+import { buildWorkSitesManageHref } from "@/lib/safe-return-path";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -70,6 +71,13 @@ export default async function NewResponsibilityOrderPage({
         }>(`responsibility-orders/${replaceOrderId}`)
       : Promise.resolve(null),
   ]);
+  const returnParams = new URLSearchParams();
+  if (effectiveCompanyId) returnParams.set("companyId", effectiveCompanyId);
+  if (replaceOrderId) returnParams.set("replaceOrderId", replaceOrderId);
+  const workSitesManageHref = buildWorkSitesManageHref(
+    effectiveCompanyId,
+    `/orders/responsibility/new${returnParams.toString() ? `?${returnParams.toString()}` : ""}`,
+  );
 
   return (
     <div className="space-y-6">
@@ -122,6 +130,7 @@ export default async function NewResponsibilityOrderPage({
             branches={branches}
             departments={departments}
             workSites={workSites}
+            workSitesManageHref={workSitesManageHref}
             initialValues={
               replacementSource
                 ? {

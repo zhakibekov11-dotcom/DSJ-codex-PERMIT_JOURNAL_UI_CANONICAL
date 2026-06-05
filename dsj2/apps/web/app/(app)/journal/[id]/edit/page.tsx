@@ -7,6 +7,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { apiFetch } from "@/lib/api";
 import { requireRoleAccess } from "@/lib/auth";
 import { getDemoPersonaForEmail } from "@/lib/demo-personas";
+import { getEmployeeSigningReadiness } from "@/lib/employee-signing-readiness";
 import {
   briefingJournalKindLabels,
   briefingTypeLabels,
@@ -71,6 +72,7 @@ export default async function EditBriefingPage({
         id: string;
         fullName: string;
         employeeNumber: string;
+        hasAccount?: boolean;
         accountEmail?: string | null;
         accountRole?: string | null;
         hasEmployeeSignerAccount?: boolean;
@@ -90,11 +92,7 @@ export default async function EditBriefingPage({
           employee.site?.name === currentDemoPersona.scopeSiteName,
       )
     : employees;
-  const participantCandidates = scopedEmployees.filter(
-    (employee) =>
-      employee.id === record.employeeId ||
-      employee.hasEmployeeSignerAccount === true,
-  );
+  const participantCandidates = scopedEmployees;
   const scopedDepartments = isShopChiefPersona
     ? departments.filter((department) => department.name === currentDemoPersona.scopeDepartmentName)
     : departments;
@@ -160,7 +158,8 @@ export default async function EditBriefingPage({
                 <Select name="employeeId" defaultValue={record.employeeId}>
                   {participantCandidates.map((employee) => (
                     <option key={employee.id} value={employee.id}>
-                      {employee.fullName} ({employee.employeeNumber})
+                      {employee.fullName} ({employee.employeeNumber}) —{" "}
+                      {getEmployeeSigningReadiness(employee).label}
                     </option>
                   ))}
                 </Select>

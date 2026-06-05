@@ -64,6 +64,10 @@ export default async function TrainingPage({ searchParams }: { searchParams: Sea
         fullName: string;
         employeeNumber: string;
         employeeKind: string;
+        hasAccount?: boolean;
+        accountEmail?: string | null;
+        accountRole?: string | null;
+        hasEmployeeSignerAccount?: boolean;
         contractorCompany?: { name: string } | null;
       }>
     >(`employees${scopedQuery}`),
@@ -255,6 +259,7 @@ export default async function TrainingPage({ searchParams }: { searchParams: Sea
                   selectedDescription="Здесь можно убрать лишних перед сохранением назначения."
                   selectedEmptyState="Выберите хотя бы одного сотрудника для назначения обучения."
                   searchPlaceholder="Поиск сотрудника"
+                  showSigningReadiness
                 />
               </div>
 

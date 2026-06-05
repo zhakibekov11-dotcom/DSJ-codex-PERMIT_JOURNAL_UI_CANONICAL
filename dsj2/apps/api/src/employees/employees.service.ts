@@ -20,7 +20,10 @@ import {
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../database/prisma.service";
 import type { AuthenticatedUser } from "../common/types/authenticated-user.type";
-import { getCompanyScope, requireCompanyScope } from "../common/utils/tenant-scope";
+import {
+  getCompanyScope,
+  requireCompanyScope,
+} from "../common/utils/tenant-scope";
 
 @Injectable()
 export class EmployeesService {
@@ -29,7 +32,9 @@ export class EmployeesService {
     private readonly auditService: AuditService,
   ) {}
 
-  private mapEmployee(employee: Awaited<ReturnType<EmployeesService["findRawById"]>>) {
+  private mapEmployee(
+    employee: Awaited<ReturnType<EmployeesService["findRawById"]>>,
+  ) {
     return {
       id: employee.id,
       companyId: employee.companyId,
@@ -56,7 +61,8 @@ export class EmployeesService {
       hasAccount: Boolean(employee.user),
       accountEmail: employee.user?.email ?? null,
       accountRole: employee.user?.role ?? null,
-      hasEmployeeSignerAccount: employee.user?.role === "EMPLOYEE_SIGNER" && employee.user.isActive,
+      hasEmployeeSignerAccount:
+        employee.user?.role === "EMPLOYEE_SIGNER" && employee.user.isActive,
       briefingCount: employee._count.briefingRecords,
       createdAt: employee.createdAt,
     };
@@ -74,7 +80,11 @@ export class EmployeesService {
     };
   }
 
-  private async ensureIinAvailable(companyId: string, iin: string, currentEmployeeId?: string) {
+  private async ensureIinAvailable(
+    companyId: string,
+    iin: string,
+    currentEmployeeId?: string,
+  ) {
     const hashes = this.buildIinHashes(iin);
     const duplicate = await this.prisma.employee.findFirst({
       where: {
@@ -90,19 +100,23 @@ export class EmployeesService {
     });
 
     if (duplicate) {
-      throw new ConflictException("Сотрудник с таким ИИН уже существует в этой компании.");
+      throw new ConflictException(
+        "Сотрудник с таким ИИН уже существует в этой компании.",
+      );
     }
 
     return hashes;
   }
 
-  private getEmployeeKindSearchClauses(search: string): Prisma.EmployeeWhereInput[] {
+  private getEmployeeKindSearchClauses(
+    search: string,
+  ): Prisma.EmployeeWhereInput[] {
     const normalized = search.trim().toLowerCase();
     const clauses: Prisma.EmployeeWhereInput[] = [];
 
     if (
-      ["contractor", "подряд", "подрядчик", "подрядной", "контракт"].some((marker) =>
-        normalized.includes(marker),
+      ["contractor", "подряд", "подрядчик", "подрядной", "контракт"].some(
+        (marker) => normalized.includes(marker),
       )
     ) {
       clauses.push({ employeeKind: "CONTRACTOR" });
@@ -119,7 +133,10 @@ export class EmployeesService {
     return clauses;
   }
 
-  private async ensureContractorCompany(companyId: string, contractorCompanyId?: string | null) {
+  private async ensureContractorCompany(
+    companyId: string,
+    contractorCompanyId?: string | null,
+  ) {
     if (!contractorCompanyId) {
       return null;
     }
@@ -138,7 +155,10 @@ export class EmployeesService {
     return contractorCompany;
   }
 
-  private async ensureDepartment(companyId: string, departmentId?: string | null) {
+  private async ensureDepartment(
+    companyId: string,
+    departmentId?: string | null,
+  ) {
     if (!departmentId) {
       return null;
     }
@@ -151,7 +171,9 @@ export class EmployeesService {
     });
 
     if (!department) {
-      throw new BadRequestException("Укажите подразделение из той же компании.");
+      throw new BadRequestException(
+        "Укажите подразделение из той же компании.",
+      );
     }
 
     return department;
@@ -229,7 +251,9 @@ export class EmployeesService {
         ...(filters.departmentId ? { departmentId: filters.departmentId } : {}),
         ...(filters.siteId ? { siteId: filters.siteId } : {}),
         ...(filters.positionId ? { positionId: filters.positionId } : {}),
-        ...(filters.contractorCompanyId ? { contractorCompanyId: filters.contractorCompanyId } : {}),
+        ...(filters.contractorCompanyId
+          ? { contractorCompanyId: filters.contractorCompanyId }
+          : {}),
         ...(filters.employeeKind ? { employeeKind: filters.employeeKind } : {}),
         ...(filters.status ? { status: filters.status } : {}),
         ...(filters.search
@@ -302,7 +326,10 @@ export class EmployeesService {
 
   async create(user: AuthenticatedUser, input: CreateEmployeeInput) {
     const companyId = requireCompanyScope(user, input.companyId);
-    const contractorCompany = await this.ensureContractorCompany(companyId, input.contractorCompanyId);
+    const contractorCompany = await this.ensureContractorCompany(
+      companyId,
+      input.contractorCompanyId,
+    );
     const departmentId = input.departmentId ?? null;
     const siteId = input.siteId ?? null;
     const positionId = input.positionId ?? null;
@@ -316,11 +343,15 @@ export class EmployeesService {
     const normalizedEmail = this.normalizeEmail(input.email);
 
     if (shouldCreateAccount && !normalizedEmail) {
-      throw new BadRequestException("Укажите email сотрудника для создания личного кабинета.");
+      throw new BadRequestException(
+        "Укажите email сотрудника для создания личного кабинета.",
+      );
     }
 
     if (shouldCreateAccount && !input.accountPassword) {
-      throw new BadRequestException("Укажите временный пароль для личного кабинета сотрудника.");
+      throw new BadRequestException(
+        "Укажите временный пароль для личного кабинета сотрудника.",
+      );
     }
 
     const iinHashes = await this.ensureIinAvailable(companyId, input.iin);
@@ -338,7 +369,9 @@ export class EmployeesService {
           });
 
           if (existingUser) {
-            throw new ConflictException("Пользователь с таким email уже существует.");
+            throw new ConflictException(
+              "Пользователь с таким email уже существует.",
+            );
           }
 
           const employeeUser = await transaction.user.create({
@@ -370,9 +403,11 @@ export class EmployeesService {
             iinLast4: input.iin.slice(-4),
             employeeNumber: input.employeeNumber,
             jobTitle: input.jobTitle,
-            jobTitleKz: input.jobTitleKz,
+            jobTitleKz: input.jobTitleKz ?? null,
             photoDataUrl: input.photoDataUrl ?? null,
-            photoFileName: input.photoDataUrl ? input.photoFileName ?? null : null,
+            photoFileName: input.photoDataUrl
+              ? (input.photoFileName ?? null)
+              : null,
             email: normalizedEmail,
             phone: input.phone ?? null,
             employeeKind,
@@ -385,15 +420,24 @@ export class EmployeesService {
         throw error;
       }
 
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        const target = Array.isArray(error.meta?.target) ? error.meta.target : [];
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        const target = Array.isArray(error.meta?.target)
+          ? error.meta.target
+          : [];
 
         if (target.includes("iinHash")) {
-          throw new ConflictException("Сотрудник с таким ИИН уже существует в этой компании.");
+          throw new ConflictException(
+            "Сотрудник с таким ИИН уже существует в этой компании.",
+          );
         }
 
         if (target.includes("employeeNumber")) {
-          throw new ConflictException("Сотрудник с таким табельным номером уже существует в этой компании.");
+          throw new ConflictException(
+            "Сотрудник с таким табельным номером уже существует в этой компании.",
+          );
         }
       }
 
@@ -418,12 +462,18 @@ export class EmployeesService {
     return this.findOne(user, employee.id);
   }
 
-  async update(user: AuthenticatedUser, id: string, input: UpdateEmployeeInput) {
+  async update(
+    user: AuthenticatedUser,
+    id: string,
+    input: UpdateEmployeeInput,
+  ) {
     const existing = await this.findRawById(id);
     getCompanyScope(user, existing.companyId);
     const contractorCompany = await this.ensureContractorCompany(
       existing.companyId,
-      input.contractorCompanyId === undefined ? existing.contractorCompanyId : input.contractorCompanyId,
+      input.contractorCompanyId === undefined
+        ? existing.contractorCompanyId
+        : input.contractorCompanyId,
     );
     const departmentId = input.departmentId ?? existing.departmentId;
     const siteId = input.siteId ?? existing.siteId;
@@ -433,19 +483,31 @@ export class EmployeesService {
       this.ensureSite(existing.companyId, siteId),
       this.ensurePosition(existing.companyId, positionId),
     ]);
-    const employeeKind = contractorCompany ? "CONTRACTOR" : input.employeeKind ?? existing.employeeKind;
+    const employeeKind = contractorCompany
+      ? "CONTRACTOR"
+      : (input.employeeKind ?? existing.employeeKind);
     const shouldCreateAccount = input.createAccount === true;
-    const normalizedEmail = this.normalizeEmail(input.email === undefined ? existing.email : input.email);
+    const normalizedEmail = this.normalizeEmail(
+      input.email === undefined ? existing.email : input.email,
+    );
     const iinHashes = input.iin
-      ? await this.ensureIinAvailable(existing.companyId, input.iin, existing.id)
+      ? await this.ensureIinAvailable(
+          existing.companyId,
+          input.iin,
+          existing.id,
+        )
       : null;
 
     if (shouldCreateAccount && !existing.userId && !normalizedEmail) {
-      throw new BadRequestException("Укажите email сотрудника для создания личного кабинета.");
+      throw new BadRequestException(
+        "Укажите email сотрудника для создания личного кабинета.",
+      );
     }
 
     if (shouldCreateAccount && !existing.userId && !input.accountPassword) {
-      throw new BadRequestException("Укажите временный пароль для личного кабинета сотрудника.");
+      throw new BadRequestException(
+        "Укажите временный пароль для личного кабинета сотрудника.",
+      );
     }
 
     try {
@@ -468,7 +530,9 @@ export class EmployeesService {
             });
 
             if (duplicate && duplicate.id !== existing.userId) {
-              throw new ConflictException("Пользователь с таким email уже существует.");
+              throw new ConflictException(
+                "Пользователь с таким email уже существует.",
+              );
             }
 
             updates.email = normalizedEmail;
@@ -490,7 +554,9 @@ export class EmployeesService {
           });
 
           if (duplicate) {
-            throw new ConflictException("Пользователь с таким email уже существует.");
+            throw new ConflictException(
+              "Пользователь с таким email уже существует.",
+            );
           }
 
           const employeeUser = await transaction.user.create({
@@ -519,7 +585,10 @@ export class EmployeesService {
             fullName: input.fullName ?? existing.fullName,
             employeeNumber: input.employeeNumber ?? existing.employeeNumber,
             jobTitle: input.jobTitle ?? existing.jobTitle,
-            jobTitleKz: input.jobTitleKz ?? existing.jobTitleKz,
+            jobTitleKz:
+              input.jobTitleKz === undefined
+                ? existing.jobTitleKz
+                : input.jobTitleKz,
             photoDataUrl:
               input.removePhoto === true
                 ? null
@@ -532,7 +601,7 @@ export class EmployeesService {
                 : input.photoDataUrl === undefined
                   ? existing.photoFileName
                   : input.photoDataUrl
-                    ? input.photoFileName ?? existing.photoFileName
+                    ? (input.photoFileName ?? existing.photoFileName)
                     : null,
             email: normalizedEmail,
             phone: input.phone === undefined ? existing.phone : input.phone,
@@ -553,15 +622,24 @@ export class EmployeesService {
         throw error;
       }
 
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        const target = Array.isArray(error.meta?.target) ? error.meta.target : [];
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        const target = Array.isArray(error.meta?.target)
+          ? error.meta.target
+          : [];
 
         if (target.includes("iinHash")) {
-          throw new ConflictException("Сотрудник с таким ИИН уже существует в этой компании.");
+          throw new ConflictException(
+            "Сотрудник с таким ИИН уже существует в этой компании.",
+          );
         }
 
         if (target.includes("employeeNumber")) {
-          throw new ConflictException("Сотрудник с таким табельным номером уже существует в этой компании.");
+          throw new ConflictException(
+            "Сотрудник с таким табельным номером уже существует в этой компании.",
+          );
         }
       }
 
@@ -590,7 +668,9 @@ export class EmployeesService {
     requireCompanyScope(user, companyIdInput ?? existing.companyId);
 
     if (existing.isArchived) {
-      throw new BadRequestException("Сотрудник уже уволен и убран из активного списка.");
+      throw new BadRequestException(
+        "Сотрудник уже уволен и убран из активного списка.",
+      );
     }
 
     await this.prisma.$transaction(async (transaction) => {

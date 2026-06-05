@@ -9,6 +9,10 @@ from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 
+def read_json_stdin():
+    return json.loads(sys.stdin.buffer.read().decode("utf-8"))
+
+
 def normalize(value):
     if value is None:
         return ""
@@ -48,7 +52,7 @@ def main():
         return 1
 
     output_path = Path(sys.argv[1])
-    payload = json.load(sys.stdin)
+    payload = read_json_stdin()
 
     try:
         request, items = validate_payload(payload)

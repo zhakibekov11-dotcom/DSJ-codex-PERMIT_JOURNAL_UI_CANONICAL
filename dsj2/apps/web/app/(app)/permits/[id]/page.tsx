@@ -1,5 +1,10 @@
+import Link from "next/link";
 import { PageHeader } from "@dsj/ui";
-import { activatePermitAction, annulPermitAction } from "@/actions/permits";
+import {
+  activatePermitAction,
+  annulPermitAction,
+  archivePermitAction,
+} from "@/actions/permits";
 import { PermitSummary, PermitWorkflowNav } from "@/components/permit-summary";
 import { SubmitButton } from "@/components/submit-button";
 import { getDemoPersonaForEmail } from "@/lib/demo-personas";
@@ -21,7 +26,12 @@ export default async function PermitDetailPage({
   params: Promise<{ id: string }>;
   searchParams: SearchParams;
 }) {
-  const session = await requireRoleAccess(["SUPER_ADMIN", "COMPANY_ADMIN", "SAFETY_ENGINEER"]);
+  const session = await requireRoleAccess([
+    "SUPER_ADMIN",
+    "COMPANY_ADMIN",
+    "SAFETY_ENGINEER",
+    "EMPLOYEE_SIGNER",
+  ]);
   const { id } = await params;
   const rawSearchParams = await searchParams;
   const companyId = firstString(rawSearchParams.companyId);
@@ -29,7 +39,8 @@ export default async function PermitDetailPage({
   const successMessage = firstString(rawSearchParams.success);
   const permit = await fetchPermit(id);
   const status = getEffectivePermitStatus(permit);
-  const readOnly = getDemoPersonaForEmail(session.user.email)?.key === "director";
+  const readOnly =
+    getDemoPersonaForEmail(session.user.email)?.key === "director";
 
   return (
     <div className="space-y-6">
@@ -46,34 +57,92 @@ export default async function PermitDetailPage({
 
       <PageHeader>
         <div>
-          <p className="text-sm uppercase tracking-[0.18em] text-slate-400">Карточка допуска</p>
-          <h1 className="mt-2 text-3xl font-semibold text-slate-950">{permit.permitCode}</h1>
+          <p className="text-sm uppercase tracking-[0.18em] text-slate-400">
+            Карточка допуска
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold text-slate-950">
+            {permit.permitCode}
+          </h1>
           <p className="mt-2 text-sm text-slate-500">
-            Подписанный payload отделён от PDF. Evidence показывается только при наличии
-            document envelope.
+            Подписанный payload отделён от PDF. Evidence показывается только при
+            наличии document envelope.
           </p>
         </div>
         <div className="flex flex-col gap-3">
-          <PermitWorkflowNav permitId={permit.id} companyId={companyId ?? permit.organizationId} />
-          {!readOnly && (status === "approved" || permit.status === "SIGNED") ? (
+          <PermitWorkflowNav
+            permitId={permit.id}
+            companyId={companyId ?? permit.organizationId}
+          />
+          {!readOnly && status === "signed" ? (
             <form action={activatePermitAction} className="flex gap-2">
               <input type="hidden" name="permitId" value={permit.id} />
-              <input type="hidden" name="companyId" value={companyId ?? permit.organizationId} />
+              <input
+                type="hidden"
+                name="companyId"
+                value={companyId ?? permit.organizationId}
+              />
               <SubmitButton label="Активировать" pendingLabel="Активация..." />
             </form>
           ) : null}
-          {!readOnly && ["draft", "missing_documents", "pending_precheck", "rejected"].includes(status) ? (
+          <div className="flex gap-2">
+            <Link
+              href={`/api/permits/${permit.id}/pdf`}
+              className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700"
+            >
+              PDF
+            </Link>
+            <Link
+              href={`/api/permits/${permit.id}/evidence`}
+              className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700"
+            >
+              Evidence
+            </Link>
+          </div>
+          {!readOnly && ["closed", "expired", "cancelled"].includes(status) ? (
+            <form action={archivePermitAction}>
+              <input type="hidden" name="permitId" value={permit.id} />
+              <input
+                type="hidden"
+                name="companyId"
+                value={companyId ?? permit.organizationId}
+              />
+              <SubmitButton label="Архивировать" pendingLabel="Архивация..." />
+            </form>
+          ) : null}
+          {!readOnly &&
+          [
+            "draft",
+            "missing_documents",
+            "pending_precheck",
+            "rejected",
+          ].includes(status) ? (
             <form action={annulPermitAction} className="flex gap-2">
               <input type="hidden" name="permitId" value={permit.id} />
-              <input type="hidden" name="companyId" value={companyId ?? permit.organizationId} />
-              <input type="hidden" name="reason" value="Допуск отменён из карточки допуска." />
-              <SubmitButton label="Отменить допуск" pendingLabel="Отмена..." variant="danger" />
+              <input
+                type="hidden"
+                name="companyId"
+                value={companyId ?? permit.organizationId}
+              />
+              <input
+                type="hidden"
+                name="reason"
+                value="Допуск отменён из карточки допуска."
+              />
+              <SubmitButton
+                label="Отменить допуск"
+                pendingLabel="Отмена..."
+                variant="danger"
+              />
             </form>
           ) : null}
         </div>
       </PageHeader>
 
-      <PermitSummary permit={permit} companyId={companyId ?? permit.organizationId} readOnly={readOnly} />
+      <PermitSummary
+        permit={permit}
+        companyId={companyId ?? permit.organizationId}
+        readOnly={readOnly}
+      />
     </div>
   );
 }

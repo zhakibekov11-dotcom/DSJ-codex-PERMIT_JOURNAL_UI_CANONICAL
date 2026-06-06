@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+} from "@nestjs/common";
 import {
   type DocumentKind,
   type ScopeType,
@@ -21,13 +30,37 @@ import {
   createSignatureVerificationSchema,
   createWorkSiteSchema,
   createAdmissionCheckSchema,
+  closePermitSchema,
+  createPermitSchema,
+  createPpeIssueRecordSchema,
+  permitListFilterSchema,
+  permitReasonSchema,
+  permitWorkflowSchema,
+  preparePermitSignSchema,
+  updatePermitSchema,
 } from "@dsj/types";
-import { createClearanceTypeSchema, createContractorOrganizationSchema, createContractorWorkerSchema, createJobRequirementMatrixSchema, createJobRequirementMatrixVersionSchema, createOrderSchema, createOrderVersionSchema, createQualificationDocumentSchema, createTrainingPlanSchema, createTrainingPlanVersionSchema, createBrigadeSchema, createBrigadeMemberSchema, createWorkPermitSchema, createWorkPermitVersionSchema, updateWorkPermitSchema, workPermitPrecheckSchema, workPermitWorkflowSchema, createBriefingJournalSchema, createBriefingJournalEntrySchema, createTrainingTypeSchema } from "./core-platform.contracts";
+import type { Response } from "express";
+import {
+  createClearanceTypeSchema,
+  createContractorOrganizationSchema,
+  createContractorWorkerSchema,
+  createJobRequirementMatrixSchema,
+  createJobRequirementMatrixVersionSchema,
+  createOrderSchema,
+  createOrderVersionSchema,
+  createQualificationDocumentSchema,
+  createTrainingPlanSchema,
+  createTrainingPlanVersionSchema,
+  createBriefingJournalSchema,
+  createBriefingJournalEntrySchema,
+  createTrainingTypeSchema,
+} from "./core-platform.contracts";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { Roles } from "../common/decorators/roles.decorator";
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe";
 import type { AuthenticatedUser } from "../common/types/authenticated-user.type";
 import { CorePlatformService } from "./core-platform.service";
+import { WorkPermitsService } from "./work-permits.service";
 
 const adminRoles = ["SUPER_ADMIN", "COMPANY_ADMIN", "SAFETY_ENGINEER"] as const;
 const signerRoles = [...adminRoles, "EMPLOYEE_SIGNER"] as const;
@@ -39,7 +72,10 @@ type OrganizationQuery = {
 
 @Controller("core-platform")
 export class CorePlatformController {
-  constructor(private readonly corePlatformService: CorePlatformService) {}
+  constructor(
+    private readonly corePlatformService: CorePlatformService,
+    private readonly workPermitsService: WorkPermitsService,
+  ) {}
 
   private resolveOrganizationId(query?: OrganizationQuery) {
     return query?.organizationId ?? query?.companyId;
@@ -63,8 +99,14 @@ export class CorePlatformController {
 
   @Get("branches")
   @Roles(...signerRoles)
-  listBranches(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listBranches(user, this.resolveOrganizationId(query));
+  listBranches(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listBranches(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("branches")
@@ -79,8 +121,14 @@ export class CorePlatformController {
 
   @Get("work-sites")
   @Roles(...signerRoles)
-  listWorkSites(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listWorkSites(user, this.resolveOrganizationId(query));
+  listWorkSites(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listWorkSites(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("work-sites")
@@ -95,8 +143,14 @@ export class CorePlatformController {
 
   @Get("positions")
   @Roles(...signerRoles)
-  listPositions(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listPositions(user, this.resolveOrganizationId(query));
+  listPositions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listPositions(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("positions")
@@ -111,8 +165,14 @@ export class CorePlatformController {
 
   @Get("contractor-organizations")
   @Roles(...signerRoles)
-  listContractorOrganizations(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listContractorOrganizations(user, this.resolveOrganizationId(query));
+  listContractorOrganizations(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listContractorOrganizations(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("contractor-organizations")
@@ -127,8 +187,14 @@ export class CorePlatformController {
 
   @Get("contractor-workers")
   @Roles(...signerRoles)
-  listContractorWorkers(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listContractorWorkers(user, this.resolveOrganizationId(query));
+  listContractorWorkers(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listContractorWorkers(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("contractor-workers")
@@ -143,8 +209,14 @@ export class CorePlatformController {
 
   @Get("scope-grants")
   @Roles(...adminRoles)
-  listScopeGrants(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listScopeGrants(user, this.resolveOrganizationId(query));
+  listScopeGrants(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listScopeGrants(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("scope-grants")
@@ -159,8 +231,14 @@ export class CorePlatformController {
 
   @Get("clearance-types")
   @Roles(...signerRoles)
-  listClearanceTypes(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listClearanceTypes(user, this.resolveOrganizationId(query));
+  listClearanceTypes(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listClearanceTypes(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("clearance-types")
@@ -175,8 +253,14 @@ export class CorePlatformController {
 
   @Get("training-types")
   @Roles(...signerRoles)
-  listTrainingTypes(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listTrainingTypes(user, this.resolveOrganizationId(query));
+  listTrainingTypes(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listTrainingTypes(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("training-types")
@@ -213,8 +297,14 @@ export class CorePlatformController {
 
   @Get("job-requirement-matrices")
   @Roles(...signerRoles)
-  listJobRequirementMatrices(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listJobRequirementMatrices(user, this.resolveOrganizationId(query));
+  listJobRequirementMatrices(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listJobRequirementMatrices(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("job-requirement-matrices")
@@ -232,15 +322,26 @@ export class CorePlatformController {
   createJobRequirementMatrixVersion(
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodValidationPipe(createJobRequirementMatrixVersionSchema))
-    input: Parameters<CorePlatformService["createJobRequirementMatrixVersion"]>[1],
+    input: Parameters<
+      CorePlatformService["createJobRequirementMatrixVersion"]
+    >[1],
   ) {
-    return this.corePlatformService.createJobRequirementMatrixVersion(user, input);
+    return this.corePlatformService.createJobRequirementMatrixVersion(
+      user,
+      input,
+    );
   }
 
   @Get("training-plans")
   @Roles(...signerRoles)
-  listTrainingPlans(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listTrainingPlans(user, this.resolveOrganizationId(query));
+  listTrainingPlans(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listTrainingPlans(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("training-plans")
@@ -265,14 +366,23 @@ export class CorePlatformController {
 
   @Post("training-plans/:trainingPlanId/approve")
   @Roles(...adminRoles)
-  approveTrainingPlan(@CurrentUser() user: AuthenticatedUser, @Param("trainingPlanId") trainingPlanId: string) {
+  approveTrainingPlan(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("trainingPlanId") trainingPlanId: string,
+  ) {
     return this.corePlatformService.approveTrainingPlan(user, trainingPlanId);
   }
 
   @Get("orders")
   @Roles(...signerRoles)
-  listOrders(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listOrders(user, this.resolveOrganizationId(query));
+  listOrders(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listOrders(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("orders")
@@ -297,7 +407,10 @@ export class CorePlatformController {
 
   @Post("orders/:orderId/approve")
   @Roles(...adminRoles)
-  approveOrder(@CurrentUser() user: AuthenticatedUser, @Param("orderId") orderId: string) {
+  approveOrder(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("orderId") orderId: string,
+  ) {
     return this.corePlatformService.approveOrder(user, orderId);
   }
 
@@ -314,14 +427,23 @@ export class CorePlatformController {
 
   @Post("orders/:orderId/annul")
   @Roles(...adminRoles)
-  annulOrder(@CurrentUser() user: AuthenticatedUser, @Param("orderId") orderId: string) {
+  annulOrder(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("orderId") orderId: string,
+  ) {
     return this.corePlatformService.annulOrder(user, orderId);
   }
 
   @Get("briefing-journals")
   @Roles(...signerRoles)
-  listBriefingJournals(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listBriefingJournals(user, this.resolveOrganizationId(query));
+  listBriefingJournals(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listBriefingJournals(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("briefing-journals")
@@ -344,16 +466,37 @@ export class CorePlatformController {
     return this.corePlatformService.createBriefingJournalEntry(user, input);
   }
 
+  @Get("briefing-journal-entries")
+  @Roles(...signerRoles)
+  listBriefingJournalEntries(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listBriefingJournalEntries(
+      user,
+      this.resolveOrganizationId(query),
+    );
+  }
+
   @Post("briefing-journal-entries/:entryId/open")
   @Roles(...signerRoles)
-  openBriefingJournalEntry(@CurrentUser() user: AuthenticatedUser, @Param("entryId") entryId: string) {
+  openBriefingJournalEntry(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("entryId") entryId: string,
+  ) {
     return this.corePlatformService.openBriefingJournalEntry(user, entryId);
   }
 
   @Post("briefing-journal-entries/:entryId/acknowledge")
   @Roles(...signerRoles)
-  acknowledgeBriefingJournalEntry(@CurrentUser() user: AuthenticatedUser, @Param("entryId") entryId: string) {
-    return this.corePlatformService.acknowledgeBriefingJournalEntry(user, entryId);
+  acknowledgeBriefingJournalEntry(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("entryId") entryId: string,
+  ) {
+    return this.corePlatformService.acknowledgeBriefingJournalEntry(
+      user,
+      entryId,
+    );
   }
 
   @Post("briefing-journal-entries/:entryId/sign")
@@ -364,19 +507,32 @@ export class CorePlatformController {
     @Body(new ZodValidationPipe(createSignatureSchema))
     input: Parameters<CorePlatformService["signBriefingJournalEntry"]>[2],
   ) {
-    return this.corePlatformService.signBriefingJournalEntry(user, entryId, input);
+    return this.corePlatformService.signBriefingJournalEntry(
+      user,
+      entryId,
+      input,
+    );
   }
 
   @Post("briefing-journal-entries/:entryId/archive")
   @Roles(...adminRoles)
-  archiveBriefingJournalEntry(@CurrentUser() user: AuthenticatedUser, @Param("entryId") entryId: string) {
+  archiveBriefingJournalEntry(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("entryId") entryId: string,
+  ) {
     return this.corePlatformService.archiveBriefingJournalEntry(user, entryId);
   }
 
   @Get("document-templates")
   @Roles(...signerRoles)
-  listDocumentTemplates(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listDocumentTemplates(user, this.resolveOrganizationId(query));
+  listDocumentTemplates(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listDocumentTemplates(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("document-templates")
@@ -391,8 +547,14 @@ export class CorePlatformController {
 
   @Get("approval-routes")
   @Roles(...signerRoles)
-  listApprovalRoutes(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listApprovalRoutes(user, this.resolveOrganizationId(query));
+  listApprovalRoutes(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listApprovalRoutes(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("approval-routes")
@@ -417,8 +579,14 @@ export class CorePlatformController {
 
   @Get("document-envelopes")
   @Roles(...signerRoles)
-  listDocumentEnvelopes(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listDocumentEnvelopes(user, this.resolveOrganizationId(query));
+  listDocumentEnvelopes(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listDocumentEnvelopes(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Get("document-envelopes/:envelopeId/evidence-package")
@@ -452,8 +620,14 @@ export class CorePlatformController {
 
   @Get("certificate-metadata")
   @Roles(...signerRoles)
-  listCertificateMetadata(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listCertificateMetadata(user, this.resolveOrganizationId(query));
+  listCertificateMetadata(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listCertificateMetadata(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("certificate-metadata")
@@ -508,8 +682,14 @@ export class CorePlatformController {
 
   @Get("retention-policies")
   @Roles(...signerRoles)
-  listRetentionPolicies(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listRetentionPolicies(user, this.resolveOrganizationId(query));
+  listRetentionPolicies(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listRetentionPolicies(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Get("retention-policies/resolve")
@@ -543,8 +723,14 @@ export class CorePlatformController {
 
   @Get("archive-records")
   @Roles(...signerRoles)
-  listArchiveRecords(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listArchiveRecords(user, this.resolveOrganizationId(query));
+  listArchiveRecords(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listArchiveRecords(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("archive-records")
@@ -559,34 +745,31 @@ export class CorePlatformController {
 
   @Get("work-permits")
   @Roles(...signerRoles)
-  listWorkPermits(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listWorkPermits(user, this.resolveOrganizationId(query));
+  listWorkPermits(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(permitListFilterSchema))
+    query: Parameters<WorkPermitsService["list"]>[1],
+  ) {
+    return this.workPermitsService.list(user, query);
   }
 
   @Get("work-permits/:permitId")
   @Roles(...signerRoles)
-  getWorkPermit(@CurrentUser() user: AuthenticatedUser, @Param("permitId") permitId: string) {
-    return this.corePlatformService.getWorkPermit(user, permitId);
+  getWorkPermit(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("permitId") permitId: string,
+  ) {
+    return this.workPermitsService.get(user, permitId);
   }
 
   @Post("work-permits")
   @Roles(...adminRoles)
   createWorkPermit(
     @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodValidationPipe(createWorkPermitSchema))
-    input: Parameters<CorePlatformService["createWorkPermit"]>[1],
+    @Body(new ZodValidationPipe(createPermitSchema))
+    input: Parameters<WorkPermitsService["create"]>[1],
   ) {
-    return this.corePlatformService.createWorkPermit(user, input);
-  }
-
-  @Post("work-permit-versions")
-  @Roles(...adminRoles)
-  createWorkPermitVersion(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodValidationPipe(createWorkPermitVersionSchema))
-    input: Parameters<CorePlatformService["createWorkPermitVersion"]>[1],
-  ) {
-    return this.corePlatformService.createWorkPermitVersion(user, input);
+    return this.workPermitsService.create(user, input);
   }
 
   @Patch("work-permits/:permitId")
@@ -594,30 +777,32 @@ export class CorePlatformController {
   updateWorkPermit(
     @CurrentUser() user: AuthenticatedUser,
     @Param("permitId") permitId: string,
-    @Body(new ZodValidationPipe(updateWorkPermitSchema))
-    input: Parameters<CorePlatformService["updateWorkPermit"]>[2],
+    @Body(new ZodValidationPipe(updatePermitSchema))
+    input: Parameters<WorkPermitsService["update"]>[2],
   ) {
-    return this.corePlatformService.updateWorkPermit(user, permitId, input);
+    return this.workPermitsService.update(user, permitId, input);
   }
 
-  @Post("brigades")
+  @Get("ppe-issues")
   @Roles(...adminRoles)
-  createBrigade(
+  listPpeIssues(
     @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodValidationPipe(createBrigadeSchema))
-    input: Parameters<CorePlatformService["createBrigade"]>[1],
+    @Query() query: OrganizationQuery,
   ) {
-    return this.corePlatformService.createBrigade(user, input);
+    return this.workPermitsService.listPpe(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
-  @Post("brigade-members")
+  @Post("ppe-issues")
   @Roles(...adminRoles)
-  createBrigadeMember(
+  createPpeIssue(
     @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodValidationPipe(createBrigadeMemberSchema))
-    input: Parameters<CorePlatformService["createBrigadeMember"]>[1],
+    @Body(new ZodValidationPipe(createPpeIssueRecordSchema))
+    input: Parameters<WorkPermitsService["createPpe"]>[1],
   ) {
-    return this.corePlatformService.createBrigadeMember(user, input);
+    return this.workPermitsService.createPpe(user, input);
   }
 
   @Post("work-permits/:permitId/precheck")
@@ -625,10 +810,8 @@ export class CorePlatformController {
   runWorkPermitPrecheck(
     @CurrentUser() user: AuthenticatedUser,
     @Param("permitId") permitId: string,
-    @Body(new ZodValidationPipe(workPermitPrecheckSchema))
-    input: Parameters<CorePlatformService["runWorkPermitPrecheck"]>[2],
   ) {
-    return this.corePlatformService.runWorkPermitPrecheck(user, permitId, input);
+    return this.workPermitsService.precheck(user, permitId);
   }
 
   @Post("work-permits/:permitId/submit")
@@ -636,27 +819,65 @@ export class CorePlatformController {
   submitWorkPermit(
     @CurrentUser() user: AuthenticatedUser,
     @Param("permitId") permitId: string,
-    @Body(new ZodValidationPipe(workPermitWorkflowSchema))
-    input: Parameters<CorePlatformService["submitWorkPermit"]>[2],
+    @Body(new ZodValidationPipe(permitWorkflowSchema))
+    input: Parameters<WorkPermitsService["submit"]>[2],
   ) {
-    return this.corePlatformService.submitWorkPermit(user, permitId, input);
+    return this.workPermitsService.submit(user, permitId, input);
+  }
+
+  @Post("work-permits/:permitId/confirm")
+  @Roles(...signerRoles)
+  confirmWorkPermit(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("permitId") permitId: string,
+    @Body(new ZodValidationPipe(permitWorkflowSchema))
+    input: Parameters<WorkPermitsService["confirm"]>[2],
+  ) {
+    return this.workPermitsService.confirm(user, permitId, input);
   }
 
   @Post("work-permits/:permitId/approve")
-  @Roles(...adminRoles)
-  approveWorkPermit(@CurrentUser() user: AuthenticatedUser, @Param("permitId") permitId: string) {
-    return this.corePlatformService.approveWorkPermit(user, permitId);
+  @Roles(...signerRoles)
+  approveWorkPermit(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("permitId") permitId: string,
+    @Body(new ZodValidationPipe(permitWorkflowSchema))
+    input: Parameters<WorkPermitsService["approve"]>[2],
+  ) {
+    return this.workPermitsService.approve(user, permitId, input);
+  }
+
+  @Post("work-permits/:permitId/reject")
+  @Roles(...signerRoles)
+  rejectWorkPermit(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("permitId") permitId: string,
+    @Body(new ZodValidationPipe(permitReasonSchema))
+    input: Parameters<WorkPermitsService["reject"]>[2],
+  ) {
+    return this.workPermitsService.reject(user, permitId, input);
+  }
+
+  @Post("work-permits/:permitId/prepare-sign")
+  @Roles(...signerRoles)
+  prepareWorkPermitSign(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("permitId") permitId: string,
+    @Body(new ZodValidationPipe(preparePermitSignSchema))
+    input: Parameters<WorkPermitsService["prepareSign"]>[2],
+  ) {
+    return this.workPermitsService.prepareSign(user, permitId, input);
   }
 
   @Post("work-permits/:permitId/activate")
-  @Roles(...adminRoles)
+  @Roles(...signerRoles)
   activateWorkPermit(
     @CurrentUser() user: AuthenticatedUser,
     @Param("permitId") permitId: string,
-    @Body(new ZodValidationPipe(workPermitWorkflowSchema))
-    input: Parameters<CorePlatformService["activateWorkPermit"]>[2],
+    @Body(new ZodValidationPipe(permitWorkflowSchema))
+    input: Parameters<WorkPermitsService["activate"]>[2],
   ) {
-    return this.corePlatformService.activateWorkPermit(user, permitId, input);
+    return this.workPermitsService.activate(user, permitId, input);
   }
 
   @Post("work-permits/:permitId/suspend")
@@ -664,49 +885,89 @@ export class CorePlatformController {
   suspendWorkPermit(
     @CurrentUser() user: AuthenticatedUser,
     @Param("permitId") permitId: string,
-    @Body(new ZodValidationPipe(workPermitWorkflowSchema))
-    input: Parameters<CorePlatformService["suspendWorkPermit"]>[2],
+    @Body(new ZodValidationPipe(permitReasonSchema))
+    input: Parameters<WorkPermitsService["suspend"]>[2],
   ) {
-    return this.corePlatformService.suspendWorkPermit(user, permitId, input);
+    return this.workPermitsService.suspend(user, permitId, input);
   }
 
-  @Post("work-permits/:permitId/sign")
-  @Roles(...signerRoles)
-  signWorkPermit(
+  @Post("work-permits/:permitId/resume")
+  @Roles(...adminRoles)
+  resumeWorkPermit(
     @CurrentUser() user: AuthenticatedUser,
     @Param("permitId") permitId: string,
-    @Body(new ZodValidationPipe(createSignatureSchema))
-    input: Parameters<CorePlatformService["signWorkPermit"]>[2],
+    @Body(new ZodValidationPipe(permitWorkflowSchema))
+    input: Parameters<WorkPermitsService["resume"]>[2],
   ) {
-    return this.corePlatformService.signWorkPermit(user, permitId, input);
+    return this.workPermitsService.resume(user, permitId, input);
   }
 
   @Post("work-permits/:permitId/close")
-  @Roles(...adminRoles)
+  @Roles(...signerRoles)
   closeWorkPermit(
     @CurrentUser() user: AuthenticatedUser,
     @Param("permitId") permitId: string,
-    @Body(new ZodValidationPipe(workPermitWorkflowSchema))
-    input: Parameters<CorePlatformService["closeWorkPermit"]>[2],
+    @Body(new ZodValidationPipe(closePermitSchema))
+    input: Parameters<WorkPermitsService["close"]>[2],
   ) {
-    return this.corePlatformService.closeWorkPermit(user, permitId, input);
+    return this.workPermitsService.close(user, permitId, input);
   }
 
-  @Post("work-permits/:permitId/annul")
+  @Post("work-permits/:permitId/cancel")
   @Roles(...adminRoles)
-  annulWorkPermit(
+  cancelWorkPermit(
     @CurrentUser() user: AuthenticatedUser,
     @Param("permitId") permitId: string,
-    @Body(new ZodValidationPipe(workPermitWorkflowSchema))
-    input: Parameters<CorePlatformService["annulWorkPermit"]>[2],
+    @Body(new ZodValidationPipe(permitReasonSchema))
+    input: Parameters<WorkPermitsService["cancel"]>[2],
   ) {
-    return this.corePlatformService.annulWorkPermit(user, permitId, input);
+    return this.workPermitsService.cancel(user, permitId, input);
+  }
+
+  @Post("work-permits/:permitId/archive")
+  @Roles(...adminRoles)
+  archiveWorkPermit(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("permitId") permitId: string,
+  ) {
+    return this.workPermitsService.archive(user, permitId);
+  }
+
+  @Get("work-permits/:permitId/evidence")
+  @Roles(...signerRoles)
+  workPermitEvidence(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("permitId") permitId: string,
+  ) {
+    return this.workPermitsService.evidence(user, permitId);
+  }
+
+  @Get("work-permits/:permitId/pdf")
+  @Roles(...signerRoles)
+  async workPermitPdf(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("permitId") permitId: string,
+    @Res() response: Response,
+  ) {
+    const buffer = await this.workPermitsService.download(user, permitId);
+    response.setHeader("Content-Type", "application/pdf");
+    response.setHeader(
+      "Content-Disposition",
+      `attachment; filename="work-permit-${permitId}.pdf"`,
+    );
+    response.send(buffer);
   }
 
   @Get("qualification-documents")
   @Roles(...signerRoles)
-  listQualificationDocuments(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listQualificationDocuments(user, this.resolveOrganizationId(query));
+  listQualificationDocuments(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listQualificationDocuments(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("qualification-documents")
@@ -721,8 +982,14 @@ export class CorePlatformController {
 
   @Get("admission/evaluations")
   @Roles(...signerRoles)
-  listAdmissionEvaluations(@CurrentUser() user: AuthenticatedUser, @Query() query: OrganizationQuery) {
-    return this.corePlatformService.listAdmissionEvaluations(user, this.resolveOrganizationId(query));
+  listAdmissionEvaluations(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: OrganizationQuery,
+  ) {
+    return this.corePlatformService.listAdmissionEvaluations(
+      user,
+      this.resolveOrganizationId(query),
+    );
   }
 
   @Post("admission/checks")
@@ -737,7 +1004,10 @@ export class CorePlatformController {
 
   @Get("admission/evaluations/:id")
   @Roles(...signerRoles)
-  getAdmissionEvaluation(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+  getAdmissionEvaluation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+  ) {
     return this.corePlatformService.getAdmissionEvaluation(user, id);
   }
 }

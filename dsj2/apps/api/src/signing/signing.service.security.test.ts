@@ -40,6 +40,7 @@ function createService(config: Record<string, string | undefined>) {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
   );
 
   return { service, state };

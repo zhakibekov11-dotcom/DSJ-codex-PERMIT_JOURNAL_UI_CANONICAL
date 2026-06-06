@@ -2,528 +2,367 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { hashDocumentPayload } from "@dsj/utils";
 import { apiFetch } from "@/lib/api";
-import {
-  buildPermitPayload,
-  deriveScopeType,
-  mapPermitWorkTypeToCore,
-  type PermitEntry,
-  type PermitWorkType,
-} from "@/lib/permits";
+import { deriveScopeType, type PermitWorkType } from "@/lib/permits";
 import { readSigningInput } from "@/lib/signing-payload";
 
-function firstString(formData: FormData, name: string) {
+function text(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
 }
 
-function optionalString(formData: FormData, name: string) {
-  return firstString(formData, name) || null;
+function optionalText(formData: FormData, name: string) {
+  return text(formData, name) || null;
 }
 
-function stringArray(formData: FormData, name: string) {
+function values(formData: FormData, name: string) {
   return formData
     .getAll(name)
     .map((value) => String(value).trim())
     .filter(Boolean);
 }
 
-function linesArray(formData: FormData, name: string) {
-  return firstString(formData, name)
+function lines(formData: FormData, name: string) {
+  return text(formData, name)
     .split(/\r?\n|,/)
     .map((value) => value.trim())
     .filter(Boolean);
 }
 
-function combinedArray(formData: FormData, name: string) {
-  return [...stringArray(formData, name), ...linesArray(formData, `${name}Text`)];
+function isoDate(formData: FormData, name: string) {
+  const value = text(formData, name);
+  return value ? new Date(value).toISOString() : "";
 }
 
-function buildPermitsUrl(
-  companyId: string | null,
-  options?: {
-    error?: string;
-    success?: string;
-  },
-) {
-  const params = new URLSearchParams();
+function permitInput(formData: FormData) {
+  const branchId = optionalText(formData, "branchId");
+  const departmentId = optionalText(formData, "departmentId");
+  const workSiteId = optionalText(formData, "workSiteId");
 
-  if (companyId) {
-    params.set("companyId", companyId);
-  }
-
-  if (options?.error) {
-    params.set("error", options.error);
-  }
-
-  if (options?.success) {
-    params.set("success", options.success);
-  }
-
-  const query = params.toString();
-  return query ? `/permits?${query}` : "/permits";
+  return {
+    permitNumber: text(formData, "permitNumber"),
+    journalRegistrationNumber: text(formData, "journalRegistrationNumber"),
+    permitType: text(formData, "permitType"),
+    workType: text(formData, "workType") as PermitWorkType,
+    workDescription: text(formData, "workDescription"),
+    workplace: text(formData, "workplace"),
+    scopeType: deriveScopeType({ branchId, departmentId, workSiteId }),
+    branchId,
+    departmentId,
+    workSiteId,
+    startAt: isoDate(formData, "startAt"),
+    endAt: isoDate(formData, "endAt"),
+    contractorId: optionalText(formData, "contractorId"),
+    contractorRepresentativeId: optionalText(
+      formData,
+      "contractorRepresentativeId",
+    ),
+    issuerId: optionalText(formData, "issuerId"),
+    responsibleManagerId: optionalText(formData, "responsibleManagerId"),
+    workProducerId: optionalText(formData, "workProducerId"),
+    admitterId: optionalText(formData, "admitterId"),
+    observerId: optionalText(formData, "observerId"),
+    crew: {
+      employeeIds: values(formData, "crewEmployeeIds"),
+      contractorWorkerIds: values(formData, "crewContractorWorkerIds"),
+    },
+    hazardFactors: lines(formData, "hazardFactors"),
+    safetyMeasures: text(formData, "safetyMeasures"),
+    ppeRequirements: optionalText(formData, "ppeRequirements"),
+    ppeIssueRecordIds: values(formData, "ppeIssueRecordIds"),
+    legalBasis: values(formData, "legalBasis"),
+    trainingEvidenceIds: values(formData, "trainingEvidenceIds"),
+    briefingEvidenceIds: values(formData, "briefingEvidenceIds"),
+    certificateEvidenceIds: values(formData, "certificateEvidenceIds"),
+    medicalEvidenceIds: values(formData, "medicalEvidenceIds"),
+    requiredDocumentIds: values(formData, "requiredDocumentIds"),
+  };
 }
 
-function buildPermitUrl(
+function permitUrl(
   permitId: string,
   companyId: string | null,
-  options?: {
-    error?: string;
-    success?: string;
-    suffix?: string;
-  },
+  options?: { suffix?: string; error?: string; success?: string },
 ) {
   const params = new URLSearchParams();
-
-  if (companyId) {
-    params.set("companyId", companyId);
-  }
-
-  if (options?.error) {
-    params.set("error", options.error);
-  }
-
-  if (options?.success) {
-    params.set("success", options.success);
-  }
-
-  const path = `/permits/${permitId}${options?.suffix ?? ""}`;
+  if (companyId) params.set("companyId", companyId);
+  if (options?.error) params.set("error", options.error);
+  if (options?.success) params.set("success", options.success);
   const query = params.toString();
+  const path = `/permits/${permitId}${options?.suffix ?? ""}`;
   return query ? `${path}?${query}` : path;
 }
 
-function revalidatePermitViews(permitId: string) {
-  revalidatePath("/permits");
-  revalidatePath(`/permits/${permitId}`);
-  revalidatePath(`/permits/${permitId}/edit`);
-  revalidatePath(`/permits/${permitId}/precheck`);
-  revalidatePath(`/permits/${permitId}/approvals`);
-  revalidatePath(`/permits/${permitId}/signatures`);
-  revalidatePath(`/permits/${permitId}/closure`);
-  revalidatePath(`/permits/${permitId}/audit`);
+function permitsUrl(
+  companyId: string | null,
+  options?: { error?: string; success?: string },
+) {
+  const params = new URLSearchParams();
+  if (companyId) params.set("companyId", companyId);
+  if (options?.error) params.set("error", options.error);
+  if (options?.success) params.set("success", options.success);
+  return params.size ? `/permits?${params.toString()}` : "/permits";
 }
 
-function readPermitEntry(formData: FormData, status: PermitEntry["status"]): PermitEntry {
-  const now = new Date().toISOString();
-  const workType = firstString(formData, "workType") as PermitWorkType;
-  const entryWithoutHash: PermitEntry = {
-    companyId: optionalString(formData, "companyId"),
-    journalId: "PERMIT_JOURNAL_MAIN",
-    permitNumber: firstString(formData, "permitNumber"),
-    journalRegistrationNumber: firstString(formData, "journalRegistrationNumber"),
-    permitType: firstString(formData, "permitType") as PermitEntry["permitType"],
-    workType,
-    status,
-    workDescription: firstString(formData, "workDescription"),
-    workplace: firstString(formData, "workplace"),
-    workZoneId: optionalString(formData, "workSiteId"),
-    departmentId: optionalString(formData, "departmentId"),
-    startAt: firstString(formData, "startAt"),
-    endAt: firstString(formData, "endAt"),
-    validUntil: optionalString(formData, "endAt"),
-    contractorId: optionalString(formData, "contractorId"),
-    contractorRepresentativeId: optionalString(formData, "contractorRepresentativeId"),
-    issuerId: optionalString(formData, "issuerId"),
-    responsibleManagerId: optionalString(formData, "responsibleManagerId"),
-    workProducerId: optionalString(formData, "workProducerId"),
-    admitterId: optionalString(formData, "admitterId"),
-    observerId: optionalString(formData, "observerId"),
-    crewMemberIds: stringArray(formData, "crewMemberIds"),
-    hazardFactors: linesArray(formData, "hazardFactors"),
-    safetyMeasures: firstString(formData, "safetyMeasures"),
-    ppeRequirements: optionalString(formData, "ppeRequirements"),
-    ppeIssuedConfirmed: formData.get("ppeIssuedConfirmed") === "on",
-    legalBasis: stringArray(formData, "legalBasis"),
-    legalBasisVersion: "PERMIT_JOURNAL_UI_CANONICAL",
-    legalBasisEffectiveDate: new Date().toISOString().slice(0, 10),
-    trainingEvidenceIds: combinedArray(formData, "trainingEvidenceIds"),
-    briefingEvidenceIds: combinedArray(formData, "briefingEvidenceIds"),
-    certificateEvidenceIds: combinedArray(formData, "certificateEvidenceIds"),
-    medicalEvidenceIds: combinedArray(formData, "medicalEvidenceIds"),
-    requiredDocumentIds: combinedArray(formData, "requiredDocumentIds"),
-    approvalStatus: status === "pending_approval" ? "pending_approval" : null,
-    signatureStatus: null,
-    createdAt: firstString(formData, "createdAt") || now,
-    updatedAt: now,
-  };
-  const normalizedPayload = JSON.stringify({
-    permitNumber: entryWithoutHash.permitNumber,
-    permitType: entryWithoutHash.permitType,
-    workType: entryWithoutHash.workType,
-    workDescription: entryWithoutHash.workDescription,
-    workplace: entryWithoutHash.workplace,
-    startAt: entryWithoutHash.startAt,
-    endAt: entryWithoutHash.endAt,
-    participants: {
-      issuerId: entryWithoutHash.issuerId,
-      responsibleManagerId: entryWithoutHash.responsibleManagerId,
-      workProducerId: entryWithoutHash.workProducerId,
-      admitterId: entryWithoutHash.admitterId,
-      crewMemberIds: entryWithoutHash.crewMemberIds,
-    },
-    hazardFactors: entryWithoutHash.hazardFactors,
-    safetyMeasures: entryWithoutHash.safetyMeasures,
-    legalBasis: entryWithoutHash.legalBasis,
-  });
+function refresh(permitId: string) {
+  revalidatePath("/permits");
+  for (const suffix of [
+    "",
+    "/edit",
+    "/precheck",
+    "/approvals",
+    "/signatures",
+    "/closure",
+    "/audit",
+  ]) {
+    revalidatePath(`/permits/${permitId}${suffix}`);
+  }
+}
 
-  return {
-    ...entryWithoutHash,
-    documentVersionHash: hashDocumentPayload(normalizedPayload),
-  };
+async function workflowAction(
+  formData: FormData,
+  endpoint: string,
+  body: unknown,
+  options: { suffix?: string; success: string },
+) {
+  const permitId = text(formData, "permitId");
+  const companyId = optionalText(formData, "companyId");
+  try {
+    await apiFetch(`core-platform/work-permits/${permitId}/${endpoint}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    redirect(
+      permitUrl(permitId, companyId, {
+        suffix: options.suffix,
+        error:
+          error instanceof Error ? error.message : "Операция не выполнена.",
+      }),
+    );
+  }
+  refresh(permitId);
+  redirect(
+    permitUrl(permitId, companyId, {
+      suffix: options.suffix,
+      success: options.success,
+    }),
+  );
 }
 
 export async function createPermitAction(formData: FormData) {
-  const companyId = optionalString(formData, "companyId");
-  const permitEntry = readPermitEntry(formData, "draft");
-  const workType = mapPermitWorkTypeToCore(permitEntry.workType);
-  const branchId = optionalString(formData, "branchId");
-  const departmentId = optionalString(formData, "departmentId");
-  const workSiteId = optionalString(formData, "workSiteId");
-  const scopeType = deriveScopeType({ branchId, departmentId, workSiteId });
-  let createdPermitId: string | null = null;
-
+  const companyId = optionalText(formData, "companyId");
+  let permitId: string;
   try {
-    const permit = await apiFetch<{ id: string }>("core-platform/work-permits", {
-      method: "POST",
-      body: JSON.stringify({
-        organizationId: companyId,
-        permitCode: permitEntry.permitNumber,
-        permitType: workType,
-        title: permitEntry.workDescription || permitEntry.permitNumber,
-        scopeType,
-        branchId,
-        departmentId,
-        workSiteId,
-        status: "DRAFT",
-        effectiveFrom: permitEntry.startAt || null,
-        effectiveTo: permitEntry.endAt || null,
-      }),
-    });
-    createdPermitId = permit.id;
-
-    await apiFetch("core-platform/work-permit-versions", {
-      method: "POST",
-      body: JSON.stringify({
-        permitId: permit.id,
-        status: "DRAFT",
-        payloadJson: buildPermitPayload(permitEntry),
-      }),
-    });
-
-    if (permitEntry.crewMemberIds.length) {
-      const brigade = await apiFetch<{ id: string }>("core-platform/brigades", {
+    const permit = await apiFetch<{ id: string }>(
+      "core-platform/work-permits",
+      {
         method: "POST",
         body: JSON.stringify({
-          permitId: permit.id,
-          brigadeCode: `${permitEntry.permitNumber}-BRG`,
-          title: "Основная бригада",
-          leaderEmployeeId: permitEntry.workProducerId,
+          organizationId: companyId,
+          ...permitInput(formData),
         }),
-      });
-
-      await Promise.all(
-        permitEntry.crewMemberIds.map((employeeId) =>
-          apiFetch("core-platform/brigade-members", {
-            method: "POST",
-            body: JSON.stringify({
-              brigadeId: brigade.id,
-              employeeId,
-              roleCode: "EXECUTOR",
-              status: "ASSIGNED",
-            }),
-          }),
-        ),
-      );
-    }
+      },
+    );
+    permitId = permit.id;
   } catch (error) {
     redirect(
-      buildPermitsUrl(companyId, {
-        error: error instanceof Error ? error.message : "Не удалось создать допуск.",
+      permitsUrl(companyId, {
+        error:
+          error instanceof Error ? error.message : "Не удалось создать допуск.",
       }),
     );
   }
-
-  if (!createdPermitId) {
-    redirect(
-      buildPermitsUrl(companyId, {
-        error: "Не удалось определить созданный допуск.",
-      }),
-    );
-  }
-
   redirect(
-    buildPermitUrl(createdPermitId, companyId, {
-      success: "Допуск создан.",
+    permitUrl(permitId, companyId, {
+      success: "Допуск создан одной транзакцией.",
     }),
   );
 }
 
 export async function updatePermitAction(formData: FormData) {
-  const permitId = firstString(formData, "permitId");
-  const companyId = optionalString(formData, "companyId");
-  const permitEntry = readPermitEntry(formData, "draft");
-  const branchId = optionalString(formData, "branchId");
-  const departmentId = optionalString(formData, "departmentId");
-  const workSiteId = optionalString(formData, "workSiteId");
-  const scopeType = deriveScopeType({ branchId, departmentId, workSiteId });
-
+  const permitId = text(formData, "permitId");
+  const companyId = optionalText(formData, "companyId");
   try {
     await apiFetch(`core-platform/work-permits/${permitId}`, {
       method: "PATCH",
-      body: JSON.stringify({
-        permitCode: permitEntry.permitNumber,
-        permitType: mapPermitWorkTypeToCore(permitEntry.workType),
-        title: permitEntry.workDescription || permitEntry.permitNumber,
-        scopeType,
-        branchId,
-        departmentId,
-        workSiteId,
-        effectiveFrom: permitEntry.startAt || null,
-        effectiveTo: permitEntry.endAt || null,
-        payloadJson: buildPermitPayload(permitEntry),
-      }),
+      body: JSON.stringify(permitInput(formData)),
     });
   } catch (error) {
     redirect(
-      buildPermitUrl(permitId, companyId, {
+      permitUrl(permitId, companyId, {
         suffix: "/edit",
-        error: error instanceof Error ? error.message : "Не удалось сохранить допуск.",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Не удалось сохранить допуск.",
       }),
     );
   }
-
-  revalidatePermitViews(permitId);
-  redirect(
-    buildPermitUrl(permitId, companyId, {
-      success: "Допуск обновлён.",
-    }),
-  );
+  refresh(permitId);
+  redirect(permitUrl(permitId, companyId, { success: "Допуск обновлён." }));
 }
 
 export async function runPermitPrecheckAction(formData: FormData) {
-  const permitId = firstString(formData, "permitId");
-  const companyId = optionalString(formData, "companyId");
-
-  try {
-    await apiFetch(`core-platform/work-permits/${permitId}/precheck`, {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-  } catch (error) {
-    redirect(
-      buildPermitUrl(permitId, companyId, {
-        suffix: "/precheck",
-        error: error instanceof Error ? error.message : "Не удалось выполнить precheck.",
-      }),
-    );
-  }
-
-  revalidatePermitViews(permitId);
-  redirect(
-    buildPermitUrl(permitId, companyId, {
+  return workflowAction(
+    formData,
+    "precheck",
+    {},
+    {
       suffix: "/precheck",
-      success: "Precheck выполнен.",
-    }),
+      success: "Precheck выполнен по реальным источникам.",
+    },
   );
 }
 
 export async function submitPermitAction(formData: FormData) {
-  const permitId = firstString(formData, "permitId");
-  const companyId = optionalString(formData, "companyId");
+  return workflowAction(
+    formData,
+    "submit",
+    { comment: optionalText(formData, "comment") },
+    { suffix: "/approvals", success: "Допуск отправлен на согласование." },
+  );
+}
 
-  try {
-    await apiFetch(`core-platform/work-permits/${permitId}/submit`, {
-      method: "POST",
-      body: JSON.stringify({
-        comment: optionalString(formData, "comment"),
-      }),
-    });
-  } catch (error) {
-    redirect(
-      buildPermitUrl(permitId, companyId, {
-        suffix: "/approvals",
-        error:
-          error instanceof Error ? error.message : "Не удалось отправить на согласование.",
-      }),
-    );
-  }
-
-  revalidatePermitViews(permitId);
-  redirect(
-    buildPermitUrl(permitId, companyId, {
-      suffix: "/approvals",
-      success: "Допуск отправлен на согласование.",
-    }),
+export async function confirmPermitAction(formData: FormData) {
+  return workflowAction(
+    formData,
+    "confirm",
+    { comment: optionalText(formData, "comment") },
+    { suffix: "/approvals", success: "Производитель работ подтвердил допуск." },
   );
 }
 
 export async function approvePermitAction(formData: FormData) {
-  const permitId = firstString(formData, "permitId");
-  const companyId = optionalString(formData, "companyId");
+  return workflowAction(
+    formData,
+    "approve",
+    { comment: optionalText(formData, "comment") },
+    { suffix: "/approvals", success: "Допуск согласован." },
+  );
+}
 
-  try {
-    await apiFetch(`core-platform/work-permits/${permitId}/approve`, {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-  } catch (error) {
-    redirect(
-      buildPermitUrl(permitId, companyId, {
-        suffix: "/approvals",
-        error: error instanceof Error ? error.message : "Не удалось согласовать допуск.",
-      }),
-    );
-  }
+export async function rejectPermitAction(formData: FormData) {
+  return workflowAction(
+    formData,
+    "reject",
+    { reason: text(formData, "reason") },
+    { suffix: "/approvals", success: "Допуск отклонён." },
+  );
+}
 
-  revalidatePermitViews(permitId);
-  redirect(
-    buildPermitUrl(permitId, companyId, {
-      success: "Допуск согласован.",
-    }),
+export async function preparePermitSignAction(formData: FormData) {
+  return workflowAction(
+    formData,
+    "prepare-sign",
+    { comment: optionalText(formData, "comment") },
+    { suffix: "/signatures", success: "Подписываемая версия зафиксирована." },
   );
 }
 
 export async function activatePermitAction(formData: FormData) {
-  const permitId = firstString(formData, "permitId");
-  const companyId = optionalString(formData, "companyId");
-
-  try {
-    await apiFetch(`core-platform/work-permits/${permitId}/activate`, {
-      method: "POST",
-      body: JSON.stringify({
-        comment: optionalString(formData, "comment"),
-      }),
-    });
-  } catch (error) {
-    redirect(
-      buildPermitUrl(permitId, companyId, {
-        error: error instanceof Error ? error.message : "Не удалось активировать допуск.",
-      }),
-    );
-  }
-
-  revalidatePermitViews(permitId);
-  redirect(
-    buildPermitUrl(permitId, companyId, {
-      success: "Допуск активирован.",
-    }),
+  return workflowAction(
+    formData,
+    "activate",
+    { comment: optionalText(formData, "comment") },
+    { success: "Допуск активирован допускающим." },
   );
 }
 
 export async function suspendPermitAction(formData: FormData) {
-  const permitId = firstString(formData, "permitId");
-  const companyId = optionalString(formData, "companyId");
+  return workflowAction(
+    formData,
+    "suspend",
+    { reason: text(formData, "reason") },
+    { suffix: "/closure", success: "Допуск приостановлен." },
+  );
+}
 
-  try {
-    await apiFetch(`core-platform/work-permits/${permitId}/suspend`, {
-      method: "POST",
-      body: JSON.stringify({
-        reason: optionalString(formData, "reason"),
-      }),
-    });
-  } catch (error) {
-    redirect(
-      buildPermitUrl(permitId, companyId, {
-        suffix: "/closure",
-        error: error instanceof Error ? error.message : "Не удалось приостановить допуск.",
-      }),
-    );
-  }
-
-  revalidatePermitViews(permitId);
-  redirect(
-    buildPermitUrl(permitId, companyId, {
-      suffix: "/closure",
-      success: "Допуск приостановлен.",
-    }),
+export async function resumePermitAction(formData: FormData) {
+  return workflowAction(
+    formData,
+    "resume",
+    { comment: optionalText(formData, "comment") },
+    { suffix: "/closure", success: "Допуск возобновлён." },
   );
 }
 
 export async function closePermitAction(formData: FormData) {
-  const permitId = firstString(formData, "permitId");
-  const companyId = optionalString(formData, "companyId");
-
-  try {
-    await apiFetch(`core-platform/work-permits/${permitId}/close`, {
-      method: "POST",
-      body: JSON.stringify({
-        comment: optionalString(formData, "comment"),
-        closure: {
-          result: optionalString(formData, "result"),
-          inspection: optionalString(formData, "inspection"),
-          closedAt: new Date().toISOString(),
-        },
-      }),
-    });
-  } catch (error) {
-    redirect(
-      buildPermitUrl(permitId, companyId, {
-        suffix: "/closure",
-        error: error instanceof Error ? error.message : "Не удалось закрыть допуск.",
-      }),
-    );
-  }
-
-  revalidatePermitViews(permitId);
-  redirect(
-    buildPermitUrl(permitId, companyId, {
-      success: "Допуск закрыт.",
-    }),
+  return workflowAction(
+    formData,
+    "close",
+    {
+      comment: optionalText(formData, "comment"),
+      closure: {
+        result: text(formData, "result"),
+        inspection: text(formData, "inspection"),
+        notes: optionalText(formData, "comment"),
+        closedAt: new Date().toISOString(),
+      },
+    },
+    { suffix: "/closure", success: "Допуск закрыт." },
   );
 }
 
 export async function annulPermitAction(formData: FormData) {
-  const permitId = firstString(formData, "permitId");
-  const companyId = optionalString(formData, "companyId");
+  return workflowAction(
+    formData,
+    "cancel",
+    { reason: text(formData, "reason") },
+    { success: "Допуск отменён." },
+  );
+}
 
-  try {
-    await apiFetch(`core-platform/work-permits/${permitId}/annul`, {
-      method: "POST",
-      body: JSON.stringify({
-        reason: optionalString(formData, "reason"),
-      }),
-    });
-  } catch (error) {
-    redirect(
-      buildPermitUrl(permitId, companyId, {
-        error: error instanceof Error ? error.message : "Не удалось отменить допуск.",
-      }),
-    );
-  }
-
-  revalidatePermitViews(permitId);
-  redirect(
-    buildPermitUrl(permitId, companyId, {
-      success: "Допуск отменён.",
-    }),
+export async function archivePermitAction(formData: FormData) {
+  return workflowAction(
+    formData,
+    "archive",
+    {},
+    {
+      success: "Допуск и evidence package архивированы.",
+    },
   );
 }
 
 export async function signPermitAction(formData: FormData) {
-  const permitId = firstString(formData, "permitId");
-  const companyId = optionalString(formData, "companyId");
-
+  const permitId = text(formData, "permitId");
+  const companyId = optionalText(formData, "companyId");
   try {
     const signingInput = readSigningInput(formData);
-
-    await apiFetch(`core-platform/work-permits/${permitId}/sign`, {
+    if (!signingInput) {
+      throw new Error("Заполните данные подписанта.");
+    }
+    const ncalayer = "cms" in signingInput;
+    const session = await apiFetch<{ id: string }>("signing/sessions", {
       method: "POST",
-      body: JSON.stringify(signingInput ?? {}),
+      body: JSON.stringify({
+        documentType: "WORK_PERMIT",
+        documentId: permitId,
+        provider: ncalayer ? "NCALAYER_PROVIDER" : "MOCK_PROVIDER",
+      }),
     });
+    await apiFetch(
+      `signing/sessions/${session.id}/${ncalayer ? "ncalayer" : "mock"}/submit`,
+      {
+        method: "POST",
+        body: JSON.stringify(signingInput),
+      },
+    );
   } catch (error) {
     redirect(
-      buildPermitUrl(permitId, companyId, {
+      permitUrl(permitId, companyId, {
         suffix: "/signatures",
-        error: error instanceof Error ? error.message : "Не удалось подписать допуск.",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Не удалось подписать допуск.",
       }),
     );
   }
-
-  revalidatePermitViews(permitId);
+  refresh(permitId);
   redirect(
-    buildPermitUrl(permitId, companyId, {
+    permitUrl(permitId, companyId, {
       suffix: "/signatures",
-      success: "Допуск подписан.",
+      success: "Допуск подписан через signing session.",
     }),
   );
 }

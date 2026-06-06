@@ -7,7 +7,8 @@ export type SigningContext = {
     | "BRIEFING_RECORD"
     | "EMPLOYEE_DOCUMENT"
     | "PROTOCOL"
-    | "RESPONSIBILITY_ORDER";
+    | "RESPONSIBILITY_ORDER"
+    | "WORK_PERMIT";
   documentHash: string | null;
 };
 

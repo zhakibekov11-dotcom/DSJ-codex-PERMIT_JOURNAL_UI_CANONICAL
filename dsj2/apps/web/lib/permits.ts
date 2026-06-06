@@ -1,115 +1,21 @@
-import type { WorkPermit, WorkPermitStatus, WorkPermitType } from "@dsj/types";
+import {
+  permitEntrySchema,
+  type PermitEntry,
+  type PermitPrecheckCheck,
+  type PermitSnapshot,
+  type PermitStatus,
+  type PermitType,
+  type PermitWorkType,
+} from "@dsj/types";
 
-export type PermitType =
-  | "HIGH_RISK_WORK"
-  | "CONTRACTOR_ACCESS"
-  | "SELF_WORK_ADMISSION"
-  | "AFTER_BRIEFING_ADMISSION"
-  | "AFTER_TRAINING_ADMISSION"
-  | "MEDICAL_BASED_ADMISSION"
-  | "PPE_BASED_ADMISSION";
-
-export type PermitWorkType =
-  | "GENERAL_HIGH_RISK"
-  | "HEIGHT_WORK"
-  | "HOT_WORK"
-  | "GAS_HAZARDOUS_WORK"
-  | "ELECTRICAL_WORK"
-  | "EARTH_WORK"
-  | "CONFINED_SPACE"
-  | "LIFTING_WORK"
-  | "CONTRACTOR_SITE_ACCESS";
-
-export type PermitStatus =
-  | "draft"
-  | "pending_precheck"
-  | "missing_documents"
-  | "pending_approval"
-  | "approved"
-  | "active"
-  | "suspended"
-  | "extended"
-  | "closed"
-  | "rejected"
-  | "cancelled"
-  | "expired"
-  | "archived";
-
-export type PermitEntry = {
-  id?: string;
-  companyId?: string | null;
-  journalId?: string | null;
-  permitNumber: string;
-  journalRegistrationNumber: string;
-  permitType: PermitType;
-  workType: PermitWorkType;
-  status: PermitStatus;
-  workDescription: string;
-  workplace: string;
-  workZoneId?: string | null;
-  departmentId?: string | null;
-  startAt: string;
-  endAt: string;
-  validUntil?: string | null;
-  contractorId?: string | null;
-  contractorRepresentativeId?: string | null;
-  issuerId?: string | null;
-  responsibleManagerId?: string | null;
-  workProducerId?: string | null;
-  admitterId?: string | null;
-  observerId?: string | null;
-  crewMemberIds: string[];
-  hazardFactors: string[];
-  safetyMeasures: string;
-  ppeRequirements?: string | null;
-  ppeIssuedConfirmed?: boolean;
-  legalBasis: string[];
-  legalBasisVersion?: string | null;
-  legalBasisEffectiveDate?: string | null;
-  trainingEvidenceIds: string[];
-  briefingEvidenceIds: string[];
-  certificateEvidenceIds: string[];
-  medicalEvidenceIds: string[];
-  requiredDocumentIds: string[];
-  precheckSummary?: {
-    result?: "PASS" | "FAIL";
-    checkedAt?: string;
-    failedRules?: string[];
-  } | null;
-  precheckChecks?: PermitPrecheckCheck[];
-  trainingCheckSnapshot?: PermitSnapshot;
-  briefingCheckSnapshot?: PermitSnapshot;
-  certificateCheckSnapshot?: PermitSnapshot;
-  medicalCheckSnapshot?: PermitSnapshot & { containsDiagnosis?: boolean };
-  ppeIssuedSnapshot?: PermitSnapshot & { confirmed?: boolean };
-  requiredDocumentSnapshot?: PermitSnapshot;
-  approvalStatus?: string | null;
-  signatureStatus?: string | null;
-  suspensionReason?: string | null;
-  cancellationReason?: string | null;
-  closure?: unknown;
-  signedPayloadHash?: string | null;
-  documentVersionHash?: string | null;
-  archivedAt?: string | null;
-  retentionUntil?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-export type PermitSnapshot = {
-  checkedAt?: string;
-  result?: "PASS" | "FAIL";
-  evidenceIds?: string[];
-};
-
-export type PermitPrecheckCheck = {
-  code: string;
-  label: string;
-  result: "PASS" | "FAIL";
-  severity: "BLOCKER" | "WARNING";
-  message: string;
-  evidence: string[];
-};
+export type {
+  PermitEntry,
+  PermitPrecheckCheck,
+  PermitSnapshot,
+  PermitStatus,
+  PermitType,
+  PermitWorkType,
+} from "@dsj/types";
 
 export type PermitVersion = {
   id: string;
@@ -117,7 +23,10 @@ export type PermitVersion = {
   versionNo: number;
   status: string;
   payloadJson: unknown;
+  payloadHash: string;
+  signedPayloadHash: string | null;
   documentEnvelopeId: string | null;
+  documentVersionId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -136,18 +45,96 @@ export type PermitBrigade = {
   }>;
 };
 
-export type PermitRecord = WorkPermit & {
+export type PermitRecord = {
+  id: string;
+  organizationId: string;
+  permitCode: string;
+  journalRegistrationNumber: string;
+  permitType: PermitType;
+  workType: PermitWorkType;
+  title: string;
+  workDescription: string;
+  workplace: string;
+  scopeType: string;
+  branchId: string | null;
+  departmentId: string | null;
+  workSiteId: string | null;
+  contractorOrganizationId: string | null;
+  contractorRepresentativeId: string | null;
+  status: string;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  closedAt: string | null;
+  signedPayloadHash: string | null;
+  archiveRecordId: string | null;
+  currentVersionId: string | null;
+  createdAt: string;
+  updatedAt: string;
   currentVersion?: PermitVersion | null;
   versions?: PermitVersion[];
   brigades?: PermitBrigade[];
+  approvals?: Array<{
+    id: string;
+    stepNo: number;
+    role: string;
+    status: string;
+    assignedEmployeeId: string | null;
+    comment: string | null;
+    rejectionReason: string | null;
+    decidedAt: string | null;
+  }>;
+  closure?: {
+    result: string;
+    inspection: string;
+    notes: string | null;
+    closedAt: string;
+  } | null;
+  documentEnvelope?: {
+    id: string;
+    status: string;
+    signatures: Array<{
+      id: string;
+      signerName: string;
+      certificateSerial: string;
+      signedAt: string | null;
+      verification?: { result: string } | null;
+    }>;
+    archiveRecords: Array<{
+      id: string;
+      status: string;
+      archivedAt: string | null;
+      disposalEligibleAt: string | null;
+    }>;
+  } | null;
   branch?: { id: string; name: string; code?: string | null } | null;
   workSite?: { id: string; name: string; location?: string | null } | null;
+};
+
+export type PermitPage = {
+  items: PermitRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
 };
 
 export type PermitOption = {
   id: string;
   label: string;
   sublabel?: string | null;
+};
+
+export type PermitFormOptions = {
+  employees: PermitOption[];
+  contractorWorkers: PermitOption[];
+  departments: PermitOption[];
+  workSites: PermitOption[];
+  contractors: PermitOption[];
+  trainingEvidence: PermitOption[];
+  briefingEvidence: PermitOption[];
+  certificateEvidence: PermitOption[];
+  medicalEvidence: PermitOption[];
+  requiredDocuments: PermitOption[];
+  ppeIssues: PermitOption[];
 };
 
 export const permitTypeLabels: Record<PermitType, string> = {
@@ -160,10 +147,9 @@ export const permitTypeLabels: Record<PermitType, string> = {
   PPE_BASED_ADMISSION: "Допуск по СИЗ",
 };
 
-export const mvpPermitTypeOptions: PermitType[] = [
-  "HIGH_RISK_WORK",
-  "CONTRACTOR_ACCESS",
-];
+export const mvpPermitTypeOptions = Object.keys(
+  permitTypeLabels,
+) as PermitType[];
 
 export const permitWorkTypeLabels: Record<PermitWorkType, string> = {
   GENERAL_HIGH_RISK: "Общие работы повышенной опасности",
@@ -174,7 +160,7 @@ export const permitWorkTypeLabels: Record<PermitWorkType, string> = {
   EARTH_WORK: "Земляные работы",
   CONFINED_SPACE: "Работы в замкнутом пространстве",
   LIFTING_WORK: "Грузоподъёмные работы",
-  CONTRACTOR_SITE_ACCESS: "Допуск подрядчика на территорию / объект",
+  CONTRACTOR_SITE_ACCESS: "Допуск подрядчика на объект",
 };
 
 export const mvpPermitWorkTypeOptions: PermitWorkType[] = [
@@ -189,6 +175,8 @@ export const permitStatusLabels: Record<PermitStatus, string> = {
   missing_documents: "Не хватает документов",
   pending_approval: "На согласовании",
   approved: "Согласован",
+  signing_ready: "Готов к подписи",
+  signed: "Подписан",
   active: "Активен",
   suspended: "Приостановлен",
   extended: "Продлён",
@@ -212,18 +200,13 @@ export const legalBasisOptions = [
   },
   {
     key: "LABOR_CODE_KZ",
-    label: "Трудовой кодекс РК",
+    label: "Трудовой кодекс Республики Казахстан",
     marker: "K1500000414",
   },
   {
     key: "HEIGHT_WORK_RULES",
-    label: "Правила БиОТ при работе на высоте",
+    label: "Правила безопасности при работе на высоте",
     marker: "V2200027349",
-  },
-  {
-    key: "INDUSTRIAL_SAFETY_MINERALS",
-    label: "Промышленная безопасность ОПО",
-    marker: "V1400010258 / V2300031718",
   },
   {
     key: "MEDICAL_EXAMS",
@@ -234,21 +217,6 @@ export const legalBasisOptions = [
     key: "PPE_NORMS",
     label: "Нормы выдачи СИЗ",
     marker: "V1500012627",
-  },
-  {
-    key: "E_DOCUMENT_E_SIGNATURE_LAW",
-    label: "Закон об электронном документе и ЭЦП",
-    marker: "Z030000370_",
-  },
-  {
-    key: "DOCUMENT_MANAGEMENT_RULES_236",
-    label: "Правила документирования и ЭДО № 236",
-    marker: "V2300033339",
-  },
-  {
-    key: "RETENTION_PERIODS",
-    label: "Типовые сроки хранения документов",
-    marker: "V1700015997 / G25JC000279",
   },
 ] as const;
 
@@ -264,53 +232,15 @@ export function getPermitStatusLabel(value: string | null | undefined) {
   return permitStatusLabels[value as PermitStatus] ?? value ?? "Не задано";
 }
 
-export function mapPermitWorkTypeToCore(value: PermitWorkType): WorkPermitType {
-  switch (value) {
-    case "HOT_WORK":
-      return "HOT_WORK";
-    case "ELECTRICAL_WORK":
-      return "ELECTRICAL";
-    case "CONFINED_SPACE":
-      return "CONFINED_SPACE";
-    case "LIFTING_WORK":
-      return "LIFTING";
-    default:
-      return "OTHER";
-  }
-}
-
-export function mapPermitStatusToCore(value: PermitStatus): WorkPermitStatus {
-  switch (value) {
-    case "pending_approval":
-      return "IN_APPROVAL";
-    case "approved":
-      return "APPROVED";
-    case "active":
-      return "ACTIVE";
-    case "suspended":
-      return "SUSPENDED";
-    case "closed":
-      return "CLOSED";
-    case "cancelled":
-      return "ANNULLED";
-    case "expired":
-      return "EXPIRED";
-    case "archived":
-      return "ARCHIVED";
-    default:
-      return "DRAFT";
-  }
-}
-
 export function deriveScopeType(input: {
   branchId?: string | null;
   departmentId?: string | null;
   workSiteId?: string | null;
 }) {
-  if (input.workSiteId) return "WORK_SITE";
-  if (input.departmentId) return "DEPARTMENT";
-  if (input.branchId) return "BRANCH";
-  return "ORGANIZATION";
+  if (input.workSiteId) return "WORK_SITE" as const;
+  if (input.departmentId) return "DEPARTMENT" as const;
+  if (input.branchId) return "BRANCH" as const;
+  return "ORGANIZATION" as const;
 }
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -321,7 +251,9 @@ function asObject(value: unknown): Record<string, unknown> {
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string" && item.length > 0)
+    ? value.filter(
+        (item): item is string => typeof item === "string" && item.length > 0,
+      )
     : [];
 }
 
@@ -329,129 +261,214 @@ export function getPermitEntry(record: {
   currentVersion?: { payloadJson?: unknown } | null;
 }): PermitEntry | null {
   const payload = asObject(record.currentVersion?.payloadJson);
-  const entry = asObject(payload.permitEntry);
+  const rawEntry = asObject(payload.permitEntry);
+  const parsed = permitEntrySchema.safeParse(rawEntry);
 
-  if (!entry.permitNumber && !entry.workType && !entry.permitType) {
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  if (!rawEntry.permitNumber && !rawEntry.workType && !rawEntry.permitType) {
     return null;
   }
 
   return {
-    permitNumber: String(entry.permitNumber ?? ""),
-    journalRegistrationNumber: String(entry.journalRegistrationNumber ?? ""),
-    permitType: (entry.permitType as PermitType | undefined) ?? "HIGH_RISK_WORK",
-    workType: (entry.workType as PermitWorkType | undefined) ?? "GENERAL_HIGH_RISK",
-    status: (entry.status as PermitStatus | undefined) ?? "draft",
-    workDescription: String(entry.workDescription ?? ""),
-    workplace: String(entry.workplace ?? ""),
-    companyId: typeof entry.companyId === "string" ? entry.companyId : null,
-    journalId: typeof entry.journalId === "string" ? entry.journalId : null,
-    workZoneId: typeof entry.workZoneId === "string" ? entry.workZoneId : null,
-    departmentId: typeof entry.departmentId === "string" ? entry.departmentId : null,
-    startAt: String(entry.startAt ?? ""),
-    endAt: String(entry.endAt ?? ""),
-    validUntil: typeof entry.validUntil === "string" ? entry.validUntil : null,
-    contractorId: typeof entry.contractorId === "string" ? entry.contractorId : null,
+    permitNumber: String(rawEntry.permitNumber ?? ""),
+    journalRegistrationNumber: String(rawEntry.journalRegistrationNumber ?? ""),
+    permitType: (rawEntry.permitType as PermitType) ?? "HIGH_RISK_WORK",
+    workType: (rawEntry.workType as PermitWorkType) ?? "GENERAL_HIGH_RISK",
+    status: (rawEntry.status as PermitStatus) ?? "draft",
+    workDescription: String(rawEntry.workDescription ?? ""),
+    workplace: String(rawEntry.workplace ?? ""),
+    companyId:
+      typeof rawEntry.companyId === "string" ? rawEntry.companyId : null,
+    journalId:
+      typeof rawEntry.journalId === "string" ? rawEntry.journalId : null,
+    workZoneId:
+      typeof rawEntry.workZoneId === "string" ? rawEntry.workZoneId : null,
+    departmentId:
+      typeof rawEntry.departmentId === "string" ? rawEntry.departmentId : null,
+    startAt: String(rawEntry.startAt ?? new Date(0).toISOString()),
+    endAt: String(rawEntry.endAt ?? new Date(0).toISOString()),
+    validUntil:
+      typeof rawEntry.validUntil === "string" ? rawEntry.validUntil : null,
+    contractorId:
+      typeof rawEntry.contractorId === "string" ? rawEntry.contractorId : null,
     contractorRepresentativeId:
-      typeof entry.contractorRepresentativeId === "string"
-        ? entry.contractorRepresentativeId
+      typeof rawEntry.contractorRepresentativeId === "string"
+        ? rawEntry.contractorRepresentativeId
         : null,
-    issuerId: typeof entry.issuerId === "string" ? entry.issuerId : null,
+    issuerId: typeof rawEntry.issuerId === "string" ? rawEntry.issuerId : null,
     responsibleManagerId:
-      typeof entry.responsibleManagerId === "string" ? entry.responsibleManagerId : null,
-    workProducerId: typeof entry.workProducerId === "string" ? entry.workProducerId : null,
-    admitterId: typeof entry.admitterId === "string" ? entry.admitterId : null,
-    observerId: typeof entry.observerId === "string" ? entry.observerId : null,
-    crewMemberIds: asStringArray(entry.crewMemberIds),
-    hazardFactors: asStringArray(entry.hazardFactors),
-    safetyMeasures: String(entry.safetyMeasures ?? ""),
-    ppeRequirements: typeof entry.ppeRequirements === "string" ? entry.ppeRequirements : null,
-    ppeIssuedConfirmed: entry.ppeIssuedConfirmed === true,
-    legalBasis: asStringArray(entry.legalBasis),
-    legalBasisVersion:
-      typeof entry.legalBasisVersion === "string" ? entry.legalBasisVersion : null,
-    legalBasisEffectiveDate:
-      typeof entry.legalBasisEffectiveDate === "string"
-        ? entry.legalBasisEffectiveDate
+      typeof rawEntry.responsibleManagerId === "string"
+        ? rawEntry.responsibleManagerId
         : null,
-    trainingEvidenceIds: asStringArray(entry.trainingEvidenceIds),
-    briefingEvidenceIds: asStringArray(entry.briefingEvidenceIds),
-    certificateEvidenceIds: asStringArray(entry.certificateEvidenceIds),
-    medicalEvidenceIds: asStringArray(entry.medicalEvidenceIds),
-    requiredDocumentIds: asStringArray(entry.requiredDocumentIds),
-    precheckSummary: asObject(entry.precheckSummary) as PermitEntry["precheckSummary"],
-    precheckChecks: Array.isArray(entry.precheckChecks)
-      ? (entry.precheckChecks as PermitPrecheckCheck[])
+    workProducerId:
+      typeof rawEntry.workProducerId === "string"
+        ? rawEntry.workProducerId
+        : null,
+    admitterId:
+      typeof rawEntry.admitterId === "string" ? rawEntry.admitterId : null,
+    observerId:
+      typeof rawEntry.observerId === "string" ? rawEntry.observerId : null,
+    crew: Array.isArray(rawEntry.crew)
+      ? (rawEntry.crew as PermitEntry["crew"])
+      : asStringArray(rawEntry.crewMemberIds).map((employeeId) => ({
+          employeeId,
+          contractorWorkerId: null,
+          roleCode: "EXECUTOR",
+        })),
+    crewMemberIds: asStringArray(rawEntry.crewMemberIds),
+    hazardFactors: asStringArray(rawEntry.hazardFactors),
+    safetyMeasures: String(rawEntry.safetyMeasures ?? ""),
+    ppeRequirements:
+      typeof rawEntry.ppeRequirements === "string"
+        ? rawEntry.ppeRequirements
+        : null,
+    ppeIssueRecordIds: asStringArray(rawEntry.ppeIssueRecordIds),
+    legalBasis: asStringArray(rawEntry.legalBasis),
+    legalBasisVersion:
+      typeof rawEntry.legalBasisVersion === "string"
+        ? rawEntry.legalBasisVersion
+        : null,
+    legalBasisEffectiveDate:
+      typeof rawEntry.legalBasisEffectiveDate === "string"
+        ? rawEntry.legalBasisEffectiveDate
+        : null,
+    trainingEvidenceIds: asStringArray(rawEntry.trainingEvidenceIds),
+    briefingEvidenceIds: asStringArray(rawEntry.briefingEvidenceIds),
+    certificateEvidenceIds: asStringArray(rawEntry.certificateEvidenceIds),
+    medicalEvidenceIds: asStringArray(rawEntry.medicalEvidenceIds),
+    requiredDocumentIds: asStringArray(rawEntry.requiredDocumentIds),
+    precheckSummary: Object.keys(asObject(rawEntry.precheckSummary)).length
+      ? (asObject(rawEntry.precheckSummary) as PermitEntry["precheckSummary"])
+      : null,
+    precheckChecks: Array.isArray(rawEntry.precheckChecks)
+      ? (rawEntry.precheckChecks as PermitPrecheckCheck[])
       : [],
-    trainingCheckSnapshot: asObject(entry.trainingCheckSnapshot) as PermitSnapshot,
-    briefingCheckSnapshot: asObject(entry.briefingCheckSnapshot) as PermitSnapshot,
-    certificateCheckSnapshot: asObject(entry.certificateCheckSnapshot) as PermitSnapshot,
-    medicalCheckSnapshot: asObject(entry.medicalCheckSnapshot) as PermitEntry["medicalCheckSnapshot"],
-    ppeIssuedSnapshot: asObject(entry.ppeIssuedSnapshot) as PermitEntry["ppeIssuedSnapshot"],
-    requiredDocumentSnapshot: asObject(entry.requiredDocumentSnapshot) as PermitSnapshot,
+    trainingCheckSnapshot: rawEntry.trainingCheckSnapshot as
+      | PermitSnapshot
+      | undefined,
+    briefingCheckSnapshot: rawEntry.briefingCheckSnapshot as
+      | PermitSnapshot
+      | undefined,
+    certificateCheckSnapshot: rawEntry.certificateCheckSnapshot as
+      | PermitSnapshot
+      | undefined,
+    medicalCheckSnapshot: rawEntry.medicalCheckSnapshot as
+      | PermitEntry["medicalCheckSnapshot"]
+      | undefined,
+    ppeIssuedSnapshot: rawEntry.ppeIssuedSnapshot as PermitSnapshot | undefined,
+    requiredDocumentSnapshot: rawEntry.requiredDocumentSnapshot as
+      | PermitSnapshot
+      | undefined,
     approvalStatus:
-      typeof entry.approvalStatus === "string" ? entry.approvalStatus : null,
+      typeof rawEntry.approvalStatus === "string"
+        ? rawEntry.approvalStatus
+        : null,
     signatureStatus:
-      typeof entry.signatureStatus === "string" ? entry.signatureStatus : null,
+      typeof rawEntry.signatureStatus === "string"
+        ? rawEntry.signatureStatus
+        : null,
     suspensionReason:
-      typeof entry.suspensionReason === "string" ? entry.suspensionReason : null,
+      typeof rawEntry.suspensionReason === "string"
+        ? rawEntry.suspensionReason
+        : null,
     cancellationReason:
-      typeof entry.cancellationReason === "string" ? entry.cancellationReason : null,
-    closure: entry.closure,
+      typeof rawEntry.cancellationReason === "string"
+        ? rawEntry.cancellationReason
+        : null,
+    rejectionReason:
+      typeof rawEntry.rejectionReason === "string"
+        ? rawEntry.rejectionReason
+        : null,
+    closure: rawEntry.closure as PermitEntry["closure"],
     signedPayloadHash:
-      typeof entry.signedPayloadHash === "string" ? entry.signedPayloadHash : null,
+      typeof rawEntry.signedPayloadHash === "string"
+        ? rawEntry.signedPayloadHash
+        : null,
     documentVersionHash:
-      typeof entry.documentVersionHash === "string" ? entry.documentVersionHash : null,
-    archivedAt: typeof entry.archivedAt === "string" ? entry.archivedAt : null,
+      typeof rawEntry.documentVersionHash === "string"
+        ? rawEntry.documentVersionHash
+        : null,
+    archivedAt:
+      typeof rawEntry.archivedAt === "string" ? rawEntry.archivedAt : null,
     retentionUntil:
-      typeof entry.retentionUntil === "string" ? entry.retentionUntil : null,
-    createdAt: typeof entry.createdAt === "string" ? entry.createdAt : undefined,
-    updatedAt: typeof entry.updatedAt === "string" ? entry.updatedAt : undefined,
+      typeof rawEntry.retentionUntil === "string"
+        ? rawEntry.retentionUntil
+        : null,
+    createdAt:
+      typeof rawEntry.createdAt === "string" ? rawEntry.createdAt : undefined,
+    updatedAt:
+      typeof rawEntry.updatedAt === "string" ? rawEntry.updatedAt : undefined,
   };
 }
 
+const statusByDatabaseValue: Record<string, PermitStatus> = {
+  DRAFT: "draft",
+  SUBMITTED: "pending_approval",
+  MISSING_DOCUMENTS: "missing_documents",
+  IN_APPROVAL: "pending_approval",
+  APPROVED: "approved",
+  SIGNING_READY: "signing_ready",
+  SIGNED: "signed",
+  ACTIVE: "active",
+  SUSPENDED: "suspended",
+  EXTENDED: "extended",
+  CLOSED: "closed",
+  REJECTED: "rejected",
+  CANCELLED: "cancelled",
+  ANNULLED: "cancelled",
+  EXPIRED: "expired",
+  ARCHIVED: "archived",
+};
+
 export function getEffectivePermitStatus(record: PermitRecord) {
-  return getPermitEntry(record)?.status ?? "draft";
+  return (
+    statusByDatabaseValue[record.status] ??
+    getPermitEntry(record)?.status ??
+    "draft"
+  );
 }
 
 export function isPermitLocked(record: PermitRecord) {
-  const status = getEffectivePermitStatus(record);
-  return [
-    "approved",
-    "active",
-    "suspended",
-    "closed",
-    "cancelled",
-    "expired",
-    "archived",
-  ].includes(status);
+  return !["draft", "missing_documents", "rejected"].includes(
+    getEffectivePermitStatus(record),
+  );
 }
 
-export function permitReferencesContractor(record: PermitRecord, contractorId: string) {
-  return getPermitEntry(record)?.contractorId === contractorId;
+export function permitReferencesContractor(
+  record: PermitRecord,
+  contractorId: string,
+) {
+  return (
+    record.contractorOrganizationId === contractorId ||
+    getPermitEntry(record)?.contractorId === contractorId
+  );
 }
 
-export function permitReferencesEmployee(record: PermitRecord, employeeId: string) {
+export function permitReferencesEmployee(
+  record: PermitRecord,
+  employeeId: string,
+) {
   const entry = getPermitEntry(record);
-
-  if (!entry) {
-    return false;
-  }
-
-  const directParticipants = [
-    entry.contractorRepresentativeId,
-    entry.issuerId,
-    entry.responsibleManagerId,
-    entry.workProducerId,
-    entry.admitterId,
-    entry.observerId,
-  ];
+  const directParticipants = entry
+    ? [
+        entry.issuerId,
+        entry.responsibleManagerId,
+        entry.workProducerId,
+        entry.admitterId,
+        entry.observerId,
+      ]
+    : [];
 
   return (
     directParticipants.includes(employeeId) ||
-    entry.crewMemberIds.includes(employeeId) ||
-    record.brigades?.some((brigade) =>
-      brigade.leaderEmployeeId === employeeId ||
-      brigade.members?.some((member) => member.employeeId === employeeId),
+    entry?.crewMemberIds.includes(employeeId) === true ||
+    record.brigades?.some(
+      (brigade) =>
+        brigade.leaderEmployeeId === employeeId ||
+        brigade.members?.some((member) => member.employeeId === employeeId),
     ) === true
   );
 }

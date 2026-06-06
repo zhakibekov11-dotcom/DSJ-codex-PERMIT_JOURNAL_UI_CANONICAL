@@ -10,7 +10,7 @@ export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 
   @Get()
-  @Roles("COMPANY_ADMIN", "SAFETY_ENGINEER")
+  @Roles("SUPER_ADMIN", "COMPANY_ADMIN", "SAFETY_ENGINEER")
   async list(
     @CurrentUser() user: AuthenticatedUser,
     @Query("limit", new ParseIntPipe({ optional: true })) limit = 30,

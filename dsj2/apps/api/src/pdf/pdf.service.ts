@@ -160,6 +160,33 @@ type ResponsibilityOrderPdf = {
   signedAt: Date | null;
 };
 
+type WorkPermitPdf = {
+  permitCode: string;
+  journalRegistrationNumber: string;
+  permitType: string;
+  workType: string;
+  status: string;
+  workDescription: string;
+  workplace: string;
+  effectiveFrom: Date | null;
+  effectiveTo: Date | null;
+  closedAt: Date | null;
+  payloadHash: string | null;
+  signedPayloadHash: string | null;
+  approvals: Array<{
+    stepNo: number;
+    role: string;
+    status: string;
+    decidedAt: Date | null;
+  }>;
+  signatures: Array<{
+    signerName: string;
+    certificateSerial: string;
+    signedAt: Date | null;
+    verification: string | null;
+  }>;
+};
+
 type CompanyDocumentPdf = {
   companyName: string;
   category: string;
@@ -491,7 +518,9 @@ export class PdfService {
 
     if (record.signedAt) {
       document.moveDown(0.8);
-      document.fontSize(11).text(`Signed at: ${formatDateTime(record.signedAt)}`);
+      document
+        .fontSize(11)
+        .text(`Signed at: ${formatDateTime(record.signedAt)}`);
     }
 
     return this.finalize(document);
@@ -556,8 +585,84 @@ export class PdfService {
 
     if (record.signedAt) {
       document.moveDown(0.6);
-      document.fontSize(11).text(`Signed at: ${formatDateTime(record.signedAt)}`);
+      document
+        .fontSize(11)
+        .text(`Signed at: ${formatDateTime(record.signedAt)}`);
     }
+
+    return this.finalize(document);
+  }
+
+  async renderWorkPermit(record: WorkPermitPdf) {
+    const document = new PDFDocument({
+      margin: 48,
+      size: "A4",
+    });
+
+    document.fontSize(20).text("Work Permit");
+    document.moveDown(0.4);
+    document
+      .fontSize(12)
+      .fillColor("#475569")
+      .text("Controlled permit lifecycle and evidence summary");
+    document.moveDown(1.2);
+
+    document
+      .fillColor("#0f172a")
+      .fontSize(11)
+      .text(`Permit number: ${record.permitCode}`)
+      .text(`Journal number: ${record.journalRegistrationNumber}`)
+      .text(`Permit type: ${record.permitType}`)
+      .text(`Work type: ${record.workType}`)
+      .text(`Status: ${record.status}`)
+      .text(`Workplace: ${record.workplace}`)
+      .text(
+        `Effective from: ${record.effectiveFrom ? formatDateTime(record.effectiveFrom) : "n/a"}`,
+      )
+      .text(
+        `Effective to: ${record.effectiveTo ? formatDateTime(record.effectiveTo) : "n/a"}`,
+      )
+      .text(
+        `Closed at: ${record.closedAt ? formatDateTime(record.closedAt) : "n/a"}`,
+      );
+
+    document.moveDown(0.8);
+    document.fontSize(13).text("Work description");
+    document.moveDown(0.3);
+    document.fontSize(11).text(record.workDescription);
+
+    document.moveDown(0.8);
+    document.fontSize(13).text("Approval decisions");
+    document.moveDown(0.3);
+    record.approvals.forEach((approval) => {
+      document
+        .fontSize(11)
+        .text(
+          `${approval.stepNo}. ${approval.role}: ${approval.status}` +
+            (approval.decidedAt
+              ? ` at ${formatDateTime(approval.decidedAt)}`
+              : ""),
+        );
+    });
+
+    document.moveDown(0.8);
+    document.fontSize(13).text("Signatures");
+    document.moveDown(0.3);
+    record.signatures.forEach((signature, index) => {
+      document
+        .fontSize(11)
+        .text(`${index + 1}. ${signature.signerName}`)
+        .text(`   Certificate: ${signature.certificateSerial}`)
+        .text(
+          `   Signed at: ${signature.signedAt ? formatDateTime(signature.signedAt) : "n/a"}`,
+        )
+        .text(`   Verification: ${signature.verification ?? "pending"}`);
+    });
+
+    document.moveDown(0.8);
+    document.fontSize(9).fillColor("#475569");
+    document.text(`Payload hash: ${record.payloadHash ?? "n/a"}`);
+    document.text(`Signed payload hash: ${record.signedPayloadHash ?? "n/a"}`);
 
     return this.finalize(document);
   }

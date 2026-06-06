@@ -25,6 +25,7 @@ import { assertOrganizationAccess } from "../common/utils/tenant-scope";
 import { parseBoolean } from "../common/utils/security-preflight";
 import type { AuthenticatedUser } from "../common/types/authenticated-user.type";
 import { CorePlatformService } from "../core-platform/core-platform.service";
+import { WorkPermitsService } from "../core-platform/work-permits.service";
 import { PrismaService } from "../database/prisma.service";
 import { ProtocolsService } from "../protocols/protocols.service";
 import { ResponsibilityOrdersService } from "../responsibility-orders/responsibility-orders.service";
@@ -72,6 +73,7 @@ export class SigningService {
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
     private readonly corePlatformService: CorePlatformService,
+    private readonly workPermitsService: WorkPermitsService,
     private readonly providerRegistry: SigningProviderRegistry,
     private readonly protocolsService: ProtocolsService,
     private readonly responsibilityOrdersService: ResponsibilityOrdersService,
@@ -239,6 +241,8 @@ export class SigningService {
         return this.findResponsibilityOrderTarget(user, documentId);
       case "EMPLOYEE_DOCUMENT":
         return this.findEmployeeDocumentTarget(user, documentId);
+      case "WORK_PERMIT":
+        return this.workPermitsService.signingTarget(user, documentId);
       default:
         throw new BadRequestException(
           `${documentType} is not wired into generic signing sessions yet.`,
@@ -604,6 +608,15 @@ export class SigningService {
         return;
       case "EMPLOYEE_DOCUMENT":
         await this.employeeDocumentsService.sign(user, session.documentId, payload, input.context);
+        return;
+      case "WORK_PERMIT":
+        await this.workPermitsService.completeSigning(
+          user,
+          session,
+          input.provider,
+          payload,
+          input.context,
+        );
         return;
       default:
         throw new BadRequestException(

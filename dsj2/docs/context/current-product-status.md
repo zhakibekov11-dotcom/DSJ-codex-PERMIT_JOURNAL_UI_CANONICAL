@@ -10,6 +10,7 @@ This is a current repo snapshot, not the final product ideal.
 - Protocol journal / protocol registry - implemented
 - Responsibility orders - implemented
 - Electronic briefing journals - implementation complete, verification pending
+- Permit journal / work permit lifecycle - working MVP implemented, deployment verification pending
 
 ## Current Account Contours
 
@@ -28,7 +29,7 @@ This is a current repo snapshot, not the final product ideal.
 
 ## Current Next Likely Module
 
-- P2 start via online work permits core
+- Permit journal deployment verification and specialized P1 form planning
 
 ## Evidence Anchors
 
@@ -38,6 +39,9 @@ This is a current repo snapshot, not the final product ideal.
 - `apps/api/src/briefing-records/briefing-records.controller.ts`
 - `apps/api/src/responsibility-orders/responsibility-orders.controller.ts`
 - `apps/api/src/signatures/signatures.service.ts`
+- `apps/api/src/core-platform/work-permits.service.ts`
+- `apps/worker/src/main.ts`
+- `apps/web/app/(app)/permits/*`
 - `apps/api/src/employee-documents/*`
 - `apps/api/src/protocols/*`
 

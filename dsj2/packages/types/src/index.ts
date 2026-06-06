@@ -11,6 +11,7 @@ export * from "./contractor";
 export * from "./dashboard";
 export * from "./document";
 export * from "./employee";
+export * from "./permit";
 export * from "./protocol";
 export * from "./responsibility-order";
 export * from "./training";

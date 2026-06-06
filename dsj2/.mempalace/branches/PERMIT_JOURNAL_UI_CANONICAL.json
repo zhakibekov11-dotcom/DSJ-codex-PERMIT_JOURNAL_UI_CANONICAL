@@ -1,7 +1,8 @@
 {
   "taskId": "PERMIT_JOURNAL_UI_CANONICAL",
   "title": "Permit Journal UI Canonical Context",
-  "status": "context_initialized",
+  "status": "mvp_implemented",
+  "completedAt": "2026-06-06",
   "contour": "big_dsj_contour",
   "module": "PermitJournalModule",
   "primaryRoutes": [
@@ -17,9 +18,7 @@
     "/contractors/[id]/access",
     "/employees/[id]/permits"
   ],
-  "canonicalContextFile": [
-    "docs/context/PERMIT_JOURNAL_UI_CANONICAL.md"
-  ],
+  "canonicalContextFile": ["docs/context/PERMIT_JOURNAL_UI_CANONICAL.md"],
   "dependsOnModules": [
     "Employees",
     "Contractors",
@@ -49,5 +48,22 @@
     "Do not make signed fields editable after approved.",
     "Do not treat PDF as signed source of truth.",
     "Do not hardcode one retention period for all documents."
+  ],
+  "implementedCapabilities": [
+    "Transactional permit creation with canonical document versions and brigade membership",
+    "Real-source precheck snapshots and server-side deterministic hashes",
+    "Assigned-participant approval, signing, activation, closure, and rejection workflow",
+    "NCALayer and mock test-mode signing through generic signing sessions",
+    "PDF, evidence package, expiration, retention policy resolution, and archive",
+    "API filtering, sorting, pagination, and employee self-service scope"
+  ],
+  "verification": [
+    "API, web, database, types, and worker typechecks passed",
+    "API, web, database, and repository test suites passed",
+    "Worker build and Prisma client generation passed"
+  ],
+  "remainingDeploymentChecks": [
+    "Apply migration to the target database",
+    "Verify production NCALayer signing and archive storage configuration"
   ]
 }

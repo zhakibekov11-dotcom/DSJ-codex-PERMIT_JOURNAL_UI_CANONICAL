@@ -583,6 +583,26 @@ export class CorePlatformService {
       };
     }
 
+    if (args.documentKind === "WORK_PERMIT") {
+      return {
+        id: null,
+        organizationId: args.organizationId,
+        retentionCode: "WORK_PERMIT_344_1Y",
+        documentKind: args.documentKind,
+        scopeType: args.scopeType,
+        retentionValue: 1,
+        retentionUnit: "YEARS" as const,
+        archiveFormat: "PDF_A_1" as const,
+        legalBasis:
+          "Rules No. 344 baseline: work permits are retained for one year from closure.",
+        holdAllowed: true,
+        destructionApprovalRequired: false,
+        effectiveFrom: BASELINE_RETENTION_EFFECTIVE_FROM,
+        effectiveTo: null,
+        description: "Baseline retention fallback for work permits.",
+      };
+    }
+
     return null;
   }
 
@@ -1896,6 +1916,11 @@ export class CorePlatformService {
     return archived;
   }
 
+  /*
+   * Legacy permit prototype. The production workflow is implemented by
+   * WorkPermitsService and these methods are intentionally unreachable.
+   */
+  /*
   private permitPayloadObject(value: unknown) {
     if (value && typeof value === "object" && !Array.isArray(value)) {
       return { ...(value as Record<string, unknown>) };
@@ -3024,6 +3049,7 @@ export class CorePlatformService {
     return updated;
   }
 
+  */
   async listQualificationDocuments(user: AuthenticatedUser, organizationId?: string) {
     const organization = await this.resolveOrganizationRecord(user, organizationId ?? null);
     return this.prisma.qualificationDocument.findMany({
@@ -3326,6 +3352,19 @@ export class CorePlatformService {
     };
   }
 
+  async listBriefingJournalEntries(
+    user: AuthenticatedUser,
+    organizationId?: string,
+  ) {
+    const organization = await this.resolveOrganizationRecord(
+      user,
+      organizationId ?? null,
+    );
+    return this.prisma.briefingJournalEntry.findMany({
+      where: { organizationId: organization.id },
+      orderBy: [{ briefingDate: "desc" }, { entryNo: "desc" }],
+    });
+  }
 
   async listBriefingJournals(user: AuthenticatedUser, organizationId?: string) {
     const organization = await this.resolveOrganizationRecord(user, organizationId ?? null);
@@ -3784,6 +3823,12 @@ export class CorePlatformService {
 
     await this.resolveOrganizationRecord(user, envelope.organizationId);
     await this.ensureDocumentTemplateInOrganization(envelope.organizationId, input.templateId ?? null);
+
+    if (envelope.documentKind === "WORK_PERMIT") {
+      throw new BadRequestException(
+        "Work permit versions are managed only by the work permit lifecycle.",
+      );
+    }
 
     if (envelope.currentVersion?.status === "SIGNED" || envelope.status === "SIGNED") {
       throw new BadRequestException(

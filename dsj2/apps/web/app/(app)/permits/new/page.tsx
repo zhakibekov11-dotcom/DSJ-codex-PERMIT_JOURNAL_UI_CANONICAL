@@ -14,8 +14,16 @@ function firstString(value: string | string[] | undefined) {
   return typeof value === "string" && value.length ? value : null;
 }
 
-export default async function NewPermitPage({ searchParams }: { searchParams: SearchParams }) {
-  const session = await requireRoleAccess(["SUPER_ADMIN", "COMPANY_ADMIN", "SAFETY_ENGINEER"]);
+export default async function NewPermitPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const session = await requireRoleAccess([
+    "SUPER_ADMIN",
+    "COMPANY_ADMIN",
+    "SAFETY_ENGINEER",
+  ]);
   const params = await searchParams;
   const errorMessage = firstString(params.error);
   const { companies, activeCompanyId } = await resolveCompanyContext({
@@ -23,7 +31,9 @@ export default async function NewPermitPage({ searchParams }: { searchParams: Se
     pathname: "/permits/new",
     searchParams: params,
   });
-  const options = await fetchPermitFormOptions(activeCompanyId ?? session.user.companyId ?? null);
+  const options = await fetchPermitFormOptions(
+    activeCompanyId ?? session.user.companyId ?? null,
+  );
   const effectiveCompanyId = activeCompanyId ?? session.user.companyId ?? null;
 
   return (
@@ -36,11 +46,15 @@ export default async function NewPermitPage({ searchParams }: { searchParams: Se
 
       <PageHeader>
         <div>
-          <p className="text-sm uppercase tracking-[0.18em] text-slate-400">Создание PermitEntry</p>
-          <h1 className="mt-2 text-3xl font-semibold text-slate-950">Создать допуск</h1>
+          <p className="text-sm uppercase tracking-[0.18em] text-slate-400">
+            Создание PermitEntry
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold text-slate-950">
+            Создать допуск
+          </h1>
           <p className="mt-2 max-w-3xl text-sm text-slate-500">
-            Черновик будет сохранён в WorkPermitVersion payload и пройдёт precheck перед
-            согласованием.
+            Черновик будет сохранён в WorkPermitVersion payload и пройдёт
+            precheck перед согласованием.
           </p>
         </div>
         <CompanySwitcher
@@ -53,13 +67,21 @@ export default async function NewPermitPage({ searchParams }: { searchParams: Se
 
       <Card>
         <CardHeader>
-          <h2 className="text-lg font-semibold text-slate-950">Карточка допуска</h2>
+          <h2 className="text-lg font-semibold text-slate-950">
+            Карточка допуска
+          </h2>
         </CardHeader>
         <CardContent>
           <PermitEntryForm
             action={createPermitAction}
-            hiddenFields={[{ name: "companyId", value: activeCompanyId ?? session.user.companyId }]}
+            hiddenFields={[
+              {
+                name: "companyId",
+                value: activeCompanyId ?? session.user.companyId,
+              },
+            ]}
             employees={options.employees}
+            contractorWorkers={options.contractorWorkers}
             departments={options.departments}
             workSites={options.workSites}
             workSitesManageHref={buildWorkSitesManageHref(
@@ -67,6 +89,12 @@ export default async function NewPermitPage({ searchParams }: { searchParams: Se
               `/permits/new${effectiveCompanyId ? `?companyId=${effectiveCompanyId}` : ""}`,
             )}
             contractors={options.contractors}
+            trainingEvidence={options.trainingEvidence}
+            briefingEvidence={options.briefingEvidence}
+            certificateEvidence={options.certificateEvidence}
+            medicalEvidence={options.medicalEvidence}
+            requiredDocuments={options.requiredDocuments}
+            ppeIssues={options.ppeIssues}
             submitLabel="Создать допуск"
             pendingLabel="Создание допуска..."
           />

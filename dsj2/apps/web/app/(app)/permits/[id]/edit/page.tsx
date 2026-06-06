@@ -42,14 +42,21 @@ export default async function EditPermitPage({
 
       <PageHeader>
         <div>
-          <p className="text-sm uppercase tracking-[0.18em] text-slate-400">Редактирование допуска</p>
-          <h1 className="mt-2 text-3xl font-semibold text-slate-950">{permit.permitCode}</h1>
+          <p className="text-sm uppercase tracking-[0.18em] text-slate-400">
+            Редактирование допуска
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold text-slate-950">
+            {permit.permitCode}
+          </h1>
           <p className="mt-2 text-sm text-slate-500">
-            Редактирование создаёт новую WorkPermitVersion до согласования. После approved
-            signed fields заблокированы.
+            Редактирование создаёт новую WorkPermitVersion до согласования.
+            После approved signed fields заблокированы.
           </p>
         </div>
-        <PermitWorkflowNav permitId={permit.id} companyId={effectiveCompanyId} />
+        <PermitWorkflowNav
+          permitId={permit.id}
+          companyId={effectiveCompanyId}
+        />
       </PageHeader>
 
       <Card>
@@ -64,6 +71,7 @@ export default async function EditPermitPage({
               { name: "companyId", value: effectiveCompanyId },
             ]}
             employees={options.employees}
+            contractorWorkers={options.contractorWorkers}
             departments={options.departments}
             workSites={options.workSites}
             workSitesManageHref={buildWorkSitesManageHref(
@@ -73,6 +81,12 @@ export default async function EditPermitPage({
               }`,
             )}
             contractors={options.contractors}
+            trainingEvidence={options.trainingEvidence}
+            briefingEvidence={options.briefingEvidence}
+            certificateEvidence={options.certificateEvidence}
+            medicalEvidence={options.medicalEvidence}
+            requiredDocuments={options.requiredDocuments}
+            ppeIssues={options.ppeIssues}
             initialValues={entry}
             submitLabel="Сохранить новую версию"
             pendingLabel="Сохранение..."

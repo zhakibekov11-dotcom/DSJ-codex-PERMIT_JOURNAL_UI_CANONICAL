@@ -37,6 +37,10 @@ const signingCallbackReconcileQueue = new Queue("dsj-signing-callback-reconcile"
   connection,
 });
 
+const workPermitExpirationQueue = new Queue("dsj-work-permit-expiration", {
+  connection,
+});
+
 const EMAIL_TRANSPORT_NOT_CONFIGURED =
   "Email notification transport is not configured.";
 
@@ -676,6 +680,71 @@ async function reconcileSigningCallbacks() {
   console.log(`[worker] signing callbacks inspected: ${staleCallbacks.length}`);
 }
 
+async function expireWorkPermits() {
+  const permits = await prisma.workPermit.findMany({
+    where: {
+      status: {
+        in: ["ACTIVE", "SUSPENDED", "EXTENDED"],
+      },
+      effectiveTo: {
+        lt: new Date(),
+      },
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      status: true,
+      effectiveTo: true,
+    },
+    orderBy: {
+      effectiveTo: "asc",
+    },
+    take: 100,
+  });
+
+  let expiredCount = 0;
+  for (const permit of permits) {
+    const updated = await prisma.$transaction(async (transaction) => {
+      const result = await transaction.workPermit.updateMany({
+        where: {
+          id: permit.id,
+          status: permit.status,
+          effectiveTo: {
+            lt: new Date(),
+          },
+        },
+        data: {
+          status: "EXPIRED",
+        },
+      });
+
+      if (result.count === 0) {
+        return false;
+      }
+
+      await transaction.auditLog.create({
+        data: {
+          companyId: permit.organizationId,
+          action: "work_permit.expired",
+          entityType: "WorkPermit",
+          entityId: permit.id,
+          metadata: {
+            previousStatus: permit.status,
+            effectiveTo: permit.effectiveTo?.toISOString() ?? null,
+          },
+        },
+      });
+      return true;
+    });
+
+    if (updated) {
+      expiredCount += 1;
+    }
+  }
+
+  console.log(`[worker] work permits expired: ${expiredCount}`);
+}
+
 async function bootstrap() {
   await prisma.$connect();
 
@@ -741,6 +810,24 @@ async function bootstrap() {
     },
   );
 
+  await workPermitExpirationQueue.add(
+    "expire",
+    {},
+    {
+      repeat: {
+        every: 1000 * 60,
+      },
+      jobId: "work-permit-expiration",
+      attempts: 3,
+      backoff: {
+        type: "exponential",
+        delay: 1000,
+      },
+      removeOnComplete: 20,
+      removeOnFail: 50,
+    },
+  );
+
   new Worker(
     "dsj-compliance",
     async () => {
@@ -770,6 +857,14 @@ async function bootstrap() {
     "dsj-signing-callback-reconcile",
     async () => {
       await reconcileSigningCallbacks();
+    },
+    { connection },
+  );
+
+  new Worker(
+    "dsj-work-permit-expiration",
+    async () => {
+      await expireWorkPermits();
     },
     { connection },
   );

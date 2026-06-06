@@ -31,12 +31,17 @@ import {
   createWorkSiteSchema,
   createAdmissionCheckSchema,
   closePermitSchema,
+  contractorAccessActListFilterSchema,
+  contractorAccessActReasonSchema,
+  contractorAccessActWorkflowSchema,
+  createContractorAccessActSchema,
   createPermitSchema,
   createPpeIssueRecordSchema,
   permitListFilterSchema,
   permitReasonSchema,
   permitWorkflowSchema,
   preparePermitSignSchema,
+  updateContractorAccessActSchema,
   updatePermitSchema,
 } from "@dsj/types";
 import type { Response } from "express";
@@ -60,6 +65,7 @@ import { Roles } from "../common/decorators/roles.decorator";
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe";
 import type { AuthenticatedUser } from "../common/types/authenticated-user.type";
 import { CorePlatformService } from "./core-platform.service";
+import { ContractorAccessActsService } from "./contractor-access-acts.service";
 import { WorkPermitsService } from "./work-permits.service";
 
 const adminRoles = ["SUPER_ADMIN", "COMPANY_ADMIN", "SAFETY_ENGINEER"] as const;
@@ -74,6 +80,7 @@ type OrganizationQuery = {
 export class CorePlatformController {
   constructor(
     private readonly corePlatformService: CorePlatformService,
+    private readonly contractorAccessActsService: ContractorAccessActsService,
     private readonly workPermitsService: WorkPermitsService,
   ) {}
 
@@ -741,6 +748,88 @@ export class CorePlatformController {
     input: Parameters<CorePlatformService["createArchiveRecord"]>[1],
   ) {
     return this.corePlatformService.createArchiveRecord(user, input);
+  }
+
+  @Get("contractor-access-acts")
+  @Roles(...signerRoles)
+  listContractorAccessActs(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(contractorAccessActListFilterSchema))
+    query: Parameters<ContractorAccessActsService["list"]>[1],
+  ) {
+    return this.contractorAccessActsService.list(user, query);
+  }
+
+  @Get("contractor-access-acts/:actId")
+  @Roles(...signerRoles)
+  getContractorAccessAct(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("actId") actId: string,
+  ) {
+    return this.contractorAccessActsService.get(user, actId);
+  }
+
+  @Post("contractor-access-acts")
+  @Roles(...adminRoles)
+  createContractorAccessAct(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(createContractorAccessActSchema))
+    input: Parameters<ContractorAccessActsService["create"]>[1],
+  ) {
+    return this.contractorAccessActsService.create(user, input);
+  }
+
+  @Patch("contractor-access-acts/:actId")
+  @Roles(...adminRoles)
+  updateContractorAccessAct(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("actId") actId: string,
+    @Body(new ZodValidationPipe(updateContractorAccessActSchema))
+    input: Parameters<ContractorAccessActsService["update"]>[2],
+  ) {
+    return this.contractorAccessActsService.update(user, actId, input);
+  }
+
+  @Post("contractor-access-acts/:actId/activate")
+  @Roles(...adminRoles)
+  activateContractorAccessAct(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("actId") actId: string,
+    @Body(new ZodValidationPipe(contractorAccessActWorkflowSchema))
+    input: Parameters<ContractorAccessActsService["activate"]>[2],
+  ) {
+    return this.contractorAccessActsService.activate(user, actId, input);
+  }
+
+  @Post("contractor-access-acts/:actId/close")
+  @Roles(...adminRoles)
+  closeContractorAccessAct(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("actId") actId: string,
+    @Body(new ZodValidationPipe(contractorAccessActWorkflowSchema))
+    input: Parameters<ContractorAccessActsService["close"]>[2],
+  ) {
+    return this.contractorAccessActsService.close(user, actId, input);
+  }
+
+  @Post("contractor-access-acts/:actId/cancel")
+  @Roles(...adminRoles)
+  cancelContractorAccessAct(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("actId") actId: string,
+    @Body(new ZodValidationPipe(contractorAccessActReasonSchema))
+    input: Parameters<ContractorAccessActsService["cancel"]>[2],
+  ) {
+    return this.contractorAccessActsService.cancel(user, actId, input);
+  }
+
+  @Post("contractor-access-acts/:actId/archive")
+  @Roles(...adminRoles)
+  archiveContractorAccessAct(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("actId") actId: string,
+  ) {
+    return this.contractorAccessActsService.archive(user, actId);
   }
 
   @Get("work-permits")

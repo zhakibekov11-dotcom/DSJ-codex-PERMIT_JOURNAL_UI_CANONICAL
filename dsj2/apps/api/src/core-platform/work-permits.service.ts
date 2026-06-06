@@ -9,6 +9,7 @@ import {
 import { Prisma } from "@prisma/client";
 import type {
   ClosePermitInput,
+  ContractorAccessActSummary,
   CreatePermitInput,
   CreatePpeIssueRecordInput,
   MockSignInput,
@@ -42,6 +43,9 @@ import {
   type WorkPermitDbStatus,
 } from "./permit-workflow";
 
+const KZ_ORDER_344_APPENDIX_1_LEGAL_BASIS = "KZ_ORDER_344_APPENDIX_1";
+const KZ_ORDER_344_EFFECTIVE_DATE = "2020-08-28";
+
 const permitInclude = {
   currentVersion: {
     include: {
@@ -69,6 +73,12 @@ const permitInclude = {
   closure: true,
   branch: true,
   workSite: true,
+  contractorAccessAct: {
+    include: {
+      contractorOrganization: true,
+      contractorRepresentative: true,
+    },
+  },
   documentEnvelope: {
     include: {
       currentVersion: true,
@@ -260,9 +270,192 @@ export class WorkPermitsService {
     };
   }
 
+  private nullableIso(value: Date | string | null | undefined) {
+    if (value instanceof Date) return value.toISOString();
+    return typeof value === "string" && value.length > 0 ? value : null;
+  }
+
+  private contractorAccessActSummary(
+    act:
+      | {
+          id: string;
+          actNumber: string;
+          status: string;
+          validFrom: Date;
+          validTo: Date;
+          workArea: string;
+          contractorOrganizationId: string;
+          contractorRepresentativeId: string | null;
+        }
+      | null
+      | undefined,
+  ): ContractorAccessActSummary | null {
+    if (!act) return null;
+    return {
+      id: act.id,
+      actNumber: act.actNumber,
+      status: act.status as ContractorAccessActSummary["status"],
+      validFrom: act.validFrom.toISOString(),
+      validTo: act.validTo.toISOString(),
+      workArea: act.workArea,
+      contractorOrganizationId: act.contractorOrganizationId,
+      contractorRepresentativeId: act.contractorRepresentativeId,
+    };
+  }
+
+  private isUniqueConstraintError(error: unknown): error is {
+    code: "P2002";
+    meta?: { target?: unknown };
+  } {
+    return (
+      error !== null &&
+      typeof error === "object" &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "P2002"
+    );
+  }
+
+  private duplicatePermitConflict(error: unknown) {
+    if (!this.isUniqueConstraintError(error)) {
+      throw error;
+    }
+    const target = error.meta?.target;
+    const fields = Array.isArray(target) ? target.join(",") : String(target);
+    if (fields.includes("journalRegistrationNumber")) {
+      throw new ConflictException(
+        "Journal registration number already exists in this organization.",
+      );
+    }
+    if (fields.includes("permitCode")) {
+      throw new ConflictException(
+        "Work permit number already exists in this organization.",
+      );
+    }
+    throw new ConflictException("Work permit unique constraint violated.");
+  }
+
+  private async attachJournalRows(permits: PermitWithDetails[]) {
+    if (!permits.length) return [];
+
+    const organizationId = permits[0].organizationId;
+    const issuerIds = [
+      ...new Set(
+        permits
+          .map((permit) => permit.issuerEmployeeId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const contractorIds = [
+      ...new Set(
+        permits
+          .map((permit) => permit.contractorOrganizationId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const [issuers, contractors] = await Promise.all([
+      issuerIds.length
+        ? this.prisma.employee.findMany({
+            where: { companyId: organizationId, id: { in: issuerIds } },
+            select: {
+              id: true,
+              fullName: true,
+              employeeNumber: true,
+              jobTitle: true,
+            },
+          })
+        : [],
+      contractorIds.length
+        ? this.prisma.contractorOrganization.findMany({
+            where: {
+              organizationId,
+              id: { in: contractorIds },
+            },
+            select: { id: true, name: true, bin: true },
+          })
+        : [],
+    ]);
+    const issuerById = new Map(issuers.map((issuer) => [issuer.id, issuer]));
+    const contractorById = new Map(
+      contractors.map((contractor) => [contractor.id, contractor]),
+    );
+
+    return permits.map((permit) => {
+      const entry = this.payloadEntry(permit);
+      const issuer = permit.issuerEmployeeId
+        ? issuerById.get(permit.issuerEmployeeId)
+        : null;
+      const contractor = permit.contractorOrganizationId
+        ? contractorById.get(permit.contractorOrganizationId)
+        : null;
+      const latestArchive =
+        permit.archiveRecord ?? permit.documentEnvelope?.archiveRecords[0];
+      const initialAdmissionAt =
+        this.nullableIso(permit.startedAt) ??
+        this.nullableIso(entry.admissionAt as string | null | undefined);
+      const repeatedAdmissionAt = this.nullableIso(
+        entry.repeatedAdmissionAt as string | null | undefined,
+      );
+      const startAt = this.nullableIso(permit.effectiveFrom);
+      const endAt = this.nullableIso(permit.effectiveTo);
+      const closedAt = this.nullableIso(permit.closedAt);
+      const archivedAt =
+        this.nullableIso(permit.archivedAt) ??
+        this.nullableIso(latestArchive?.archivedAt);
+      const retentionUntil =
+        this.nullableIso(latestArchive?.disposalEligibleAt) ??
+        this.nullableIso(
+          permit.archiveRecord?.retentionPolicy?.effectiveTo ?? null,
+        );
+
+      return {
+        ...permit,
+        journal: {
+          journalRegistrationNumber: permit.journalRegistrationNumber,
+          permitNumber: permit.permitCode,
+          initialAdmissionAt,
+          repeatedAdmissionAt,
+          issuer: issuer
+            ? {
+                id: issuer.id,
+                displayName: issuer.fullName,
+                sublabel: [issuer.employeeNumber, issuer.jobTitle]
+                  .filter(Boolean)
+                  .join(" / "),
+              }
+            : null,
+          workDescription: permit.workDescription,
+          workplace: permit.workplace,
+          workType: permit.workType,
+          status: entryStatusByDbStatus[permit.status] ?? "draft",
+          startAt,
+          endAt,
+          validUntil:
+            endAt ?? this.nullableIso(entry.validUntil as string | null),
+          contractor: contractor
+            ? {
+                id: contractor.id,
+                displayName: contractor.name,
+                sublabel: contractor.bin ?? null,
+              }
+            : null,
+          closedAt,
+          archivedAt,
+          retentionUntil,
+          archiveStatus: latestArchive?.status ?? null,
+        },
+      };
+    });
+  }
+
+  private async attachJournalRow(permit: PermitWithDetails) {
+    const [withJournal] = await this.attachJournalRows([permit]);
+    return withJournal;
+  }
+
   private entryFromInput(
     input: CreatePermitInput,
     status: PermitEntry["status"] = "draft",
+    contractorAccessAct: ContractorAccessActSummary | null = null,
   ): PermitEntry {
     const now = new Date().toISOString();
     return {
@@ -275,6 +468,7 @@ export class WorkPermitsService {
       status,
       workDescription: input.workDescription,
       workplace: input.workplace,
+      equipmentOrObject: input.equipmentOrObject ?? null,
       workZoneId: input.workSiteId ?? null,
       departmentId: input.departmentId ?? null,
       startAt: input.startAt,
@@ -282,6 +476,8 @@ export class WorkPermitsService {
       validUntil: input.endAt,
       contractorId: input.contractorId ?? null,
       contractorRepresentativeId: input.contractorRepresentativeId ?? null,
+      contractorAccessActId: input.contractorAccessActId ?? null,
+      contractorAccessAct,
       issuerId: input.issuerId ?? null,
       responsibleManagerId: input.responsibleManagerId ?? null,
       workProducerId: input.workProducerId ?? null,
@@ -302,11 +498,42 @@ export class WorkPermitsService {
       crewMemberIds: input.crew.employeeIds,
       hazardFactors: input.hazardFactors,
       safetyMeasures: input.safetyMeasures,
+      workplacePreparationMeasures: input.workplacePreparationMeasures ?? null,
+      safetyMeasureExecutors: input.safetyMeasureExecutors ?? null,
+      airAnalysisRequired: input.airAnalysisRequired ?? false,
+      airAnalysisResult: input.airAnalysisResult ?? null,
+      airAnalysisAt: input.airAnalysisAt ?? null,
+      airAnalysisBy: input.airAnalysisBy ?? null,
+      isolationLockoutMeasures: input.isolationLockoutMeasures ?? null,
+      fencingAndSignsMeasures: input.fencingAndSignsMeasures ?? null,
+      fireSafetyMeasures: input.fireSafetyMeasures ?? null,
+      communicationOrAdjacentAreaApprovals:
+        input.communicationOrAdjacentAreaApprovals ?? null,
+      targetBriefingText: input.targetBriefingText ?? null,
+      targetBriefingAt: input.targetBriefingAt ?? null,
+      targetBriefingInstructorId: input.targetBriefingInstructorId ?? null,
+      crewInstructionAcknowledgements: [
+        ...input.crew.employeeIds.map((employeeId) => ({
+          employeeId,
+          contractorWorkerId: null,
+          status: "pending" as const,
+          acknowledgedAt: null,
+        })),
+        ...input.crew.contractorWorkerIds.map((contractorWorkerId) => ({
+          employeeId: null,
+          contractorWorkerId,
+          status: "pending" as const,
+          acknowledgedAt: null,
+        })),
+      ],
+      admissionAt: input.admissionAt ?? null,
+      admittedById: input.admittedById ?? null,
+      acceptedByWorkProducerAt: input.acceptedByWorkProducerAt ?? null,
       ppeRequirements: input.ppeRequirements ?? null,
       ppeIssueRecordIds: input.ppeIssueRecordIds,
       legalBasis: input.legalBasis,
-      legalBasisVersion: "PERMIT_JOURNAL_UI_CANONICAL",
-      legalBasisEffectiveDate: now.slice(0, 10),
+      legalBasisVersion: KZ_ORDER_344_APPENDIX_1_LEGAL_BASIS,
+      legalBasisEffectiveDate: KZ_ORDER_344_EFFECTIVE_DATE,
       trainingEvidenceIds: input.trainingEvidenceIds,
       briefingEvidenceIds: input.briefingEvidenceIds,
       certificateEvidenceIds: input.certificateEvidenceIds,
@@ -326,6 +553,10 @@ export class WorkPermitsService {
       | "workSiteId"
       | "contractorId"
       | "contractorRepresentativeId"
+      | "contractorAccessActId"
+      | "workType"
+      | "startAt"
+      | "endAt"
       | "issuerId"
       | "responsibleManagerId"
       | "workProducerId"
@@ -352,8 +583,15 @@ export class WorkPermitsService {
       ),
     ];
 
-    const [employees, workers, contractor, branch, department, workSite] =
-      await Promise.all([
+    const [
+      employees,
+      workers,
+      contractor,
+      contractorAccessAct,
+      branch,
+      department,
+      workSite,
+    ] = await Promise.all([
         uniqueEmployeeIds.length
           ? this.prisma.employee.findMany({
               where: {
@@ -382,6 +620,21 @@ export class WorkPermitsService {
           ? this.prisma.contractorOrganization.findFirst({
               where: { id: input.contractorId, organizationId, isActive: true },
               select: { id: true },
+            })
+          : null,
+        input.contractorAccessActId
+          ? this.prisma.contractorAccessAct.findFirst({
+              where: { id: input.contractorAccessActId, organizationId },
+              select: {
+                id: true,
+                actNumber: true,
+                status: true,
+                validFrom: true,
+                validTo: true,
+                workArea: true,
+                contractorOrganizationId: true,
+                contractorRepresentativeId: true,
+              },
             })
           : null,
         input.branchId
@@ -427,6 +680,45 @@ export class WorkPermitsService {
         "Contractor does not belong to the organization.",
       );
     }
+    if (input.contractorAccessActId && !contractorAccessAct) {
+      throw new BadRequestException(
+        "Contractor access act does not belong to the organization.",
+      );
+    }
+    if (contractorAccessAct) {
+      if (contractorAccessAct.status !== "ACTIVE") {
+        throw new BadRequestException(
+          "Work permit can link only to an active contractor access act.",
+        );
+      }
+      if (!input.contractorId) {
+        throw new BadRequestException(
+          "Contractor is required when linking a contractor access act.",
+        );
+      }
+      if (contractorAccessAct.contractorOrganizationId !== input.contractorId) {
+        throw new BadRequestException(
+          "Work permit contractor does not match the contractor access act.",
+        );
+      }
+      const effectiveFrom = new Date(input.startAt);
+      const effectiveTo = new Date(input.endAt);
+      if (
+        Number.isNaN(effectiveFrom.getTime()) ||
+        Number.isNaN(effectiveTo.getTime()) ||
+        effectiveTo.getTime() <= effectiveFrom.getTime()
+      ) {
+        throw new BadRequestException("Work permit endAt must be after startAt.");
+      }
+      if (
+        effectiveFrom.getTime() < contractorAccessAct.validFrom.getTime() ||
+        effectiveTo.getTime() > contractorAccessAct.validTo.getTime()
+      ) {
+        throw new BadRequestException(
+          "Work permit validity must be inside contractor access act validity.",
+        );
+      }
+    }
     if (
       input.contractorId &&
       workers.some(
@@ -452,6 +744,7 @@ export class WorkPermitsService {
         "Work site does not belong to the organization.",
       );
     }
+    return this.contractorAccessActSummary(contractorAccessAct);
   }
 
   private async approvalRoute(
@@ -652,7 +945,13 @@ export class WorkPermitsService {
       this.prisma.workPermit.count({ where }),
     ]);
 
-    return { items, total, page: filters.page, pageSize: filters.pageSize };
+    const journalItems = await this.attachJournalRows(items);
+    return {
+      items: journalItems,
+      total,
+      page: filters.page,
+      pageSize: filters.pageSize,
+    };
   }
 
   async get(user: AuthenticatedUser, id: string) {
@@ -661,7 +960,7 @@ export class WorkPermitsService {
     await this.expireDuePermits(permit.organizationId);
     permit = await this.findPermit(id);
     await this.assertAccess(user, permit);
-    return permit;
+    return this.attachJournalRow(permit);
   }
 
   async create(user: AuthenticatedUser, input: CreatePermitInput) {
@@ -669,14 +968,21 @@ export class WorkPermitsService {
       user,
       input.organizationId ?? null,
     );
-    await this.validateReferences(organizationId, input);
+    const contractorAccessAct = await this.validateReferences(
+      organizationId,
+      input,
+    );
     const route = await this.approvalRoute(organizationId, input.scopeType);
     resolveWorkPermitApprovalSteps(route?.steps ?? []);
     const id = randomUUID();
     const envelopeId = randomUUID();
     const documentVersionId = randomUUID();
     const workPermitVersionId = randomUUID();
-    const entry = this.entryFromInput({ ...input, organizationId }, "draft");
+    const entry = this.entryFromInput(
+      { ...input, organizationId },
+      "draft",
+      contractorAccessAct,
+    );
     const payload = {
       source: "PERMIT_JOURNAL_UI_CANONICAL",
       canonicalContextFile: "docs/context/PERMIT_JOURNAL_UI_CANONICAL.md",
@@ -684,7 +990,8 @@ export class WorkPermitsService {
     };
     const payloadHash = canonicalHash(payload);
 
-    await this.prisma.$transaction(async (transaction) => {
+    try {
+      await this.prisma.$transaction(async (transaction) => {
       await transaction.documentEnvelope.create({
         data: {
           id: envelopeId,
@@ -733,6 +1040,7 @@ export class WorkPermitsService {
           workSiteId: input.workSiteId ?? null,
           contractorOrganizationId: input.contractorId ?? null,
           contractorRepresentativeId: input.contractorRepresentativeId ?? null,
+          contractorAccessActId: input.contractorAccessActId ?? null,
           issuerEmployeeId: input.issuerId ?? null,
           responsibleManagerEmployeeId: input.responsibleManagerId ?? null,
           workProducerEmployeeId: input.workProducerId ?? null,
@@ -799,7 +1107,10 @@ export class WorkPermitsService {
           ],
         });
       }
-    });
+      });
+    } catch (error) {
+      this.duplicatePermitConflict(error);
+    }
 
     await this.auditService.log({
       actorUserId: user.userId,
@@ -857,6 +1168,10 @@ export class WorkPermitsService {
       workType: input.workType ?? currentWorkType,
       workDescription: input.workDescription ?? permit.workDescription,
       workplace: input.workplace ?? permit.workplace,
+      equipmentOrObject:
+        input.equipmentOrObject === undefined
+          ? (current.equipmentOrObject as string | null | undefined)
+          : input.equipmentOrObject,
       scopeType: input.scopeType ?? permit.scopeType,
       branchId: input.branchId === undefined ? permit.branchId : input.branchId,
       departmentId:
@@ -881,6 +1196,10 @@ export class WorkPermitsService {
         input.contractorRepresentativeId === undefined
           ? permit.contractorRepresentativeId
           : input.contractorRepresentativeId,
+      contractorAccessActId:
+        input.contractorAccessActId === undefined
+          ? permit.contractorAccessActId
+          : input.contractorAccessActId,
       issuerId:
         input.issuerId === undefined ? permit.issuerEmployeeId : input.issuerId,
       responsibleManagerId:
@@ -903,6 +1222,76 @@ export class WorkPermitsService {
       hazardFactors: input.hazardFactors ?? stringArray(current.hazardFactors),
       safetyMeasures:
         input.safetyMeasures ?? String(current.safetyMeasures ?? ""),
+      workplacePreparationMeasures:
+        input.workplacePreparationMeasures === undefined
+          ? (current.workplacePreparationMeasures as
+              | string
+              | null
+              | undefined)
+          : input.workplacePreparationMeasures,
+      safetyMeasureExecutors:
+        input.safetyMeasureExecutors === undefined
+          ? (current.safetyMeasureExecutors as string | null | undefined)
+          : input.safetyMeasureExecutors,
+      airAnalysisRequired:
+        input.airAnalysisRequired === undefined
+          ? Boolean(current.airAnalysisRequired)
+          : input.airAnalysisRequired,
+      airAnalysisResult:
+        input.airAnalysisResult === undefined
+          ? (current.airAnalysisResult as string | null | undefined)
+          : input.airAnalysisResult,
+      airAnalysisAt:
+        input.airAnalysisAt === undefined
+          ? (current.airAnalysisAt as string | null | undefined)
+          : input.airAnalysisAt,
+      airAnalysisBy:
+        input.airAnalysisBy === undefined
+          ? (current.airAnalysisBy as string | null | undefined)
+          : input.airAnalysisBy,
+      isolationLockoutMeasures:
+        input.isolationLockoutMeasures === undefined
+          ? (current.isolationLockoutMeasures as string | null | undefined)
+          : input.isolationLockoutMeasures,
+      fencingAndSignsMeasures:
+        input.fencingAndSignsMeasures === undefined
+          ? (current.fencingAndSignsMeasures as string | null | undefined)
+          : input.fencingAndSignsMeasures,
+      fireSafetyMeasures:
+        input.fireSafetyMeasures === undefined
+          ? (current.fireSafetyMeasures as string | null | undefined)
+          : input.fireSafetyMeasures,
+      communicationOrAdjacentAreaApprovals:
+        input.communicationOrAdjacentAreaApprovals === undefined
+          ? (current.communicationOrAdjacentAreaApprovals as
+              | string
+              | null
+              | undefined)
+          : input.communicationOrAdjacentAreaApprovals,
+      targetBriefingText:
+        input.targetBriefingText === undefined
+          ? (current.targetBriefingText as string | null | undefined)
+          : input.targetBriefingText,
+      targetBriefingAt:
+        input.targetBriefingAt === undefined
+          ? (current.targetBriefingAt as string | null | undefined)
+          : input.targetBriefingAt,
+      targetBriefingInstructorId:
+        input.targetBriefingInstructorId === undefined
+          ? (current.targetBriefingInstructorId as string | null | undefined)
+          : input.targetBriefingInstructorId,
+      admissionAt:
+        input.admissionAt === undefined
+          ? (current.admissionAt as string | null | undefined)
+          : input.admissionAt,
+      admittedById:
+        input.admittedById === undefined
+          ? (current.admittedById as string | null | undefined)
+          : input.admittedById,
+      acceptedByWorkProducerAt:
+        input.acceptedByWorkProducerAt === undefined
+          ? (current.acceptedByWorkProducerAt as string | null | undefined)
+          : input.acceptedByWorkProducerAt,
       ppeRequirements:
         input.ppeRequirements === undefined
           ? (current.ppeRequirements as string | null | undefined)
@@ -922,14 +1311,18 @@ export class WorkPermitsService {
       requiredDocumentIds:
         input.requiredDocumentIds ?? stringArray(current.requiredDocumentIds),
     } satisfies CreatePermitInput;
-    await this.validateReferences(permit.organizationId, merged);
+    const contractorAccessAct = await this.validateReferences(
+      permit.organizationId,
+      merged,
+    );
     const entry = {
-      ...this.entryFromInput(merged, "draft"),
+      ...this.entryFromInput(merged, "draft", contractorAccessAct),
       createdAt: String(current.createdAt ?? permit.createdAt.toISOString()),
     };
     const payload = this.payloadWithEntry(permit, entry);
 
-    await this.prisma.$transaction(async (transaction) => {
+    try {
+      await this.prisma.$transaction(async (transaction) => {
       await transaction.workPermit.update({
         where: { id },
         data: {
@@ -946,6 +1339,7 @@ export class WorkPermitsService {
           workSiteId: merged.workSiteId ?? null,
           contractorOrganizationId: merged.contractorId ?? null,
           contractorRepresentativeId: merged.contractorRepresentativeId ?? null,
+          contractorAccessActId: merged.contractorAccessActId ?? null,
           issuerEmployeeId: merged.issuerId ?? null,
           responsibleManagerEmployeeId: merged.responsibleManagerId ?? null,
           workProducerEmployeeId: merged.workProducerId ?? null,
@@ -1016,7 +1410,10 @@ export class WorkPermitsService {
         payload,
         user.userId,
       );
-    });
+      });
+    } catch (error) {
+      this.duplicatePermitConflict(error);
+    }
 
     await this.auditService.log({
       actorUserId: user.userId,
@@ -1136,6 +1533,7 @@ export class WorkPermitsService {
       ppeIssues,
       workSite,
       contractor,
+      contractorAccessAct,
     ] = await Promise.all([
       this.prisma.employee.findMany({
         where: {
@@ -1239,6 +1637,24 @@ export class WorkPermitsService {
             },
           })
         : null,
+      permit.contractorAccessActId
+        ? this.prisma.contractorAccessAct.findFirst({
+            where: {
+              id: permit.contractorAccessActId,
+              organizationId: permit.organizationId,
+            },
+            select: {
+              id: true,
+              actNumber: true,
+              status: true,
+              validFrom: true,
+              validTo: true,
+              workArea: true,
+              contractorOrganizationId: true,
+              contractorRepresentativeId: true,
+            },
+          })
+        : null,
     ]);
 
     const activePeople =
@@ -1249,6 +1665,18 @@ export class WorkPermitsService {
       workers.length === participantWorkerIds.length &&
       workers.every(
         (worker) => worker.status === "active" && !worker.isArchived,
+      );
+    const contractorWorkersInScope =
+      participantWorkerIds.length === 0 ||
+      Boolean(
+        permit.contractorOrganizationId &&
+          contractor &&
+          workers.length === participantWorkerIds.length &&
+          workers.every(
+            (worker) =>
+              worker.contractorOrganizationId ===
+              permit.contractorOrganizationId,
+          ),
       );
     const trainingEvidence = trainings
       .filter(
@@ -1348,6 +1776,18 @@ export class WorkPermitsService {
     const requiresContractor =
       permit.permitType === "CONTRACTOR_ACCESS" ||
       permit.workType === "CONTRACTOR_SITE_ACCESS";
+    const contractorAccessActCoversPermit = Boolean(
+      contractorAccessAct &&
+        contractorAccessAct.status === "ACTIVE" &&
+        permit.contractorOrganizationId &&
+        contractorAccessAct.contractorOrganizationId ===
+          permit.contractorOrganizationId &&
+        permit.effectiveFrom &&
+        permit.effectiveTo &&
+        permit.effectiveFrom.getTime() >=
+          contractorAccessAct.validFrom.getTime() &&
+        permit.effectiveTo.getTime() <= contractorAccessAct.validTo.getTime(),
+    );
     const checks = [
       {
         code: "ACTIVE_PARTICIPANTS",
@@ -1438,6 +1878,23 @@ export class WorkPermitsService {
           permit.contractorRepresentativeId,
         ].filter((value): value is string => Boolean(value)),
       },
+      {
+        code: "CONTRACTOR_WORKERS",
+        label: "Contractor workers match selected contractor",
+        passed: contractorWorkersInScope,
+        evidence: participantWorkerIds,
+      },
+      {
+        code: "CONTRACTOR_ACCESS_ACT",
+        label: "Active contractor access act",
+        passed:
+          permit.workType !== "CONTRACTOR_SITE_ACCESS" ||
+          contractorAccessActCoversPermit,
+        evidence: [
+          permit.contractorAccessActId,
+          contractorAccessAct?.actNumber,
+        ].filter((value): value is string => Boolean(value)),
+      },
     ].map((check) => ({
       code: check.code,
       label: check.label,
@@ -1474,6 +1931,23 @@ export class WorkPermitsService {
         requiredEvidence,
         "REQUIRED_DOCUMENTS",
       ),
+      contractorAccessActSnapshot: {
+        checkedAt: checkedAt.toISOString(),
+        result:
+          checks.find((check) => check.code === "CONTRACTOR_ACCESS_ACT")
+            ?.result ?? ("FAIL" as const),
+        evidence: contractorAccessAct
+          ? [
+              this.snapshotEvidence("CONTRACTOR_ACCESS_ACT", {
+                id: contractorAccessAct.id,
+                status: contractorAccessAct.status,
+                documentNumber: contractorAccessAct.actNumber,
+                validUntil: contractorAccessAct.validTo,
+                subjectId: contractorAccessAct.contractorOrganizationId,
+              }),
+            ]
+          : [],
+      },
     };
     const nextEntry = {
       ...entry,

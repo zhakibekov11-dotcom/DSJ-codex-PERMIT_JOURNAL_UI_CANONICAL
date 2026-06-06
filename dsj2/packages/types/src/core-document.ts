@@ -13,6 +13,7 @@ export const documentKindSchema = z.enum([
   "BRIEFING_JOURNAL_ENTRY",
   "PROTOCOL",
   "WORK_PERMIT",
+  "CONTRACTOR_ACCESS_ACT",
 ]);
 
 export const documentEnvelopeStatusSchema = z.enum([

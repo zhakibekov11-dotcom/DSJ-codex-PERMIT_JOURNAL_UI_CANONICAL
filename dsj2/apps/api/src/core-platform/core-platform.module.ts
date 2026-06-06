@@ -5,6 +5,7 @@ import { MockSigningProvider } from "../signatures/providers/mock-signing.provid
 import { NcalayerSigningProvider } from "../signatures/providers/ncalayer-signing.provider";
 import { CorePlatformController } from "./core-platform.controller";
 import { CorePlatformService } from "./core-platform.service";
+import { ContractorAccessActsService } from "./contractor-access-acts.service";
 import { WorkPermitsService } from "./work-permits.service";
 
 @Module({
@@ -12,10 +13,11 @@ import { WorkPermitsService } from "./work-permits.service";
   controllers: [CorePlatformController],
   providers: [
     CorePlatformService,
+    ContractorAccessActsService,
     WorkPermitsService,
     MockSigningProvider,
     NcalayerSigningProvider,
   ],
-  exports: [CorePlatformService, WorkPermitsService],
+  exports: [CorePlatformService, ContractorAccessActsService, WorkPermitsService],
 })
 export class CorePlatformModule {}

@@ -1,8 +1,11 @@
 import { z } from "zod";
+import { contractorAccessActSummarySchema } from "./contractor";
 import { scopeTypeSchema } from "./core-identity";
 
 const optionalId = z.string().min(1).nullable().optional();
 const isoDateTime = z.string().datetime({ offset: true });
+const optionalLongText = z.string().max(8000).nullable().optional();
+const optionalMediumText = z.string().max(4000).nullable().optional();
 
 export const permitTypeSchema = z.enum([
   "HIGH_RISK_WORK",
@@ -56,6 +59,13 @@ export const permitSubjectSchema = z.object({
   roleCode: z.string().min(1).max(120),
 });
 
+export const permitCrewInstructionAcknowledgementSchema = z.object({
+  employeeId: optionalId,
+  contractorWorkerId: optionalId,
+  status: z.enum(["pending", "acknowledged"]),
+  acknowledgedAt: isoDateTime.nullable().optional(),
+});
+
 export const permitSnapshotEvidenceSchema = z.object({
   id: z.string(),
   sourceType: z.string(),
@@ -90,6 +100,32 @@ export const permitClosureSchema = z.object({
   notes: z.string().max(4000).nullable().optional(),
 });
 
+export const permitJournalPartySchema = z.object({
+  id: z.string(),
+  displayName: z.string(),
+  sublabel: z.string().nullable().optional(),
+});
+
+export const permitJournalRowSchema = z.object({
+  journalRegistrationNumber: z.string(),
+  permitNumber: z.string(),
+  initialAdmissionAt: isoDateTime.nullable(),
+  repeatedAdmissionAt: isoDateTime.nullable(),
+  issuer: permitJournalPartySchema.nullable(),
+  workDescription: z.string(),
+  workplace: z.string(),
+  workType: permitWorkTypeSchema,
+  status: permitStatusSchema,
+  startAt: isoDateTime.nullable(),
+  endAt: isoDateTime.nullable(),
+  validUntil: isoDateTime.nullable(),
+  contractor: permitJournalPartySchema.nullable(),
+  closedAt: isoDateTime.nullable(),
+  archivedAt: isoDateTime.nullable(),
+  retentionUntil: isoDateTime.nullable(),
+  archiveStatus: z.string().nullable(),
+});
+
 export const permitEntrySchema = z.object({
   id: z.string().optional(),
   companyId: optionalId,
@@ -101,6 +137,7 @@ export const permitEntrySchema = z.object({
   status: permitStatusSchema,
   workDescription: z.string().min(2).max(4000),
   workplace: z.string().min(2).max(1000),
+  equipmentOrObject: z.string().max(1000).nullable().optional(),
   workZoneId: optionalId,
   departmentId: optionalId,
   startAt: isoDateTime,
@@ -108,6 +145,8 @@ export const permitEntrySchema = z.object({
   validUntil: z.string().datetime({ offset: true }).nullable().optional(),
   contractorId: optionalId,
   contractorRepresentativeId: optionalId,
+  contractorAccessActId: optionalId,
+  contractorAccessAct: contractorAccessActSummarySchema.nullable().optional(),
   issuerId: optionalId,
   responsibleManagerId: optionalId,
   workProducerId: optionalId,
@@ -117,7 +156,26 @@ export const permitEntrySchema = z.object({
   crewMemberIds: z.array(z.string()).default([]),
   hazardFactors: z.array(z.string().min(1)).min(1),
   safetyMeasures: z.string().min(2).max(8000),
-  ppeRequirements: z.string().max(4000).nullable().optional(),
+  workplacePreparationMeasures: optionalLongText,
+  safetyMeasureExecutors: optionalMediumText,
+  airAnalysisRequired: z.boolean().default(false),
+  airAnalysisResult: optionalMediumText,
+  airAnalysisAt: isoDateTime.nullable().optional(),
+  airAnalysisBy: z.string().max(255).nullable().optional(),
+  isolationLockoutMeasures: optionalLongText,
+  fencingAndSignsMeasures: optionalLongText,
+  fireSafetyMeasures: optionalLongText,
+  communicationOrAdjacentAreaApprovals: optionalLongText,
+  targetBriefingText: optionalLongText,
+  targetBriefingAt: isoDateTime.nullable().optional(),
+  targetBriefingInstructorId: optionalId,
+  crewInstructionAcknowledgements: z
+    .array(permitCrewInstructionAcknowledgementSchema)
+    .default([]),
+  admissionAt: isoDateTime.nullable().optional(),
+  admittedById: optionalId,
+  acceptedByWorkProducerAt: isoDateTime.nullable().optional(),
+  ppeRequirements: optionalMediumText,
   ppeIssueRecordIds: z.array(z.string()).default([]),
   legalBasis: z.array(z.string()).min(1),
   legalBasisVersion: z.string().nullable().optional(),
@@ -144,6 +202,7 @@ export const permitEntrySchema = z.object({
     .optional(),
   ppeIssuedSnapshot: permitSnapshotSchema.optional(),
   requiredDocumentSnapshot: permitSnapshotSchema.optional(),
+  contractorAccessActSnapshot: permitSnapshotSchema.optional(),
   approvalStatus: z.string().nullable().optional(),
   signatureStatus: z.string().nullable().optional(),
   suspensionReason: z.string().nullable().optional(),
@@ -172,6 +231,7 @@ export const createPermitSchema = z
     workType: mvpPermitWorkTypeSchema,
     workDescription: z.string().min(2).max(4000),
     workplace: z.string().min(2).max(1000),
+    equipmentOrObject: z.string().max(1000).nullable().optional(),
     scopeType: scopeTypeSchema,
     branchId: optionalId,
     departmentId: optionalId,
@@ -180,6 +240,7 @@ export const createPermitSchema = z
     endAt: isoDateTime,
     contractorId: optionalId,
     contractorRepresentativeId: optionalId,
+    contractorAccessActId: optionalId,
     issuerId: optionalId,
     responsibleManagerId: optionalId,
     workProducerId: optionalId,
@@ -191,7 +252,23 @@ export const createPermitSchema = z
     }),
     hazardFactors: z.array(z.string().min(1)).min(1),
     safetyMeasures: z.string().min(2).max(8000),
-    ppeRequirements: z.string().max(4000).nullable().optional(),
+    workplacePreparationMeasures: optionalLongText,
+    safetyMeasureExecutors: optionalMediumText,
+    airAnalysisRequired: z.boolean().optional(),
+    airAnalysisResult: optionalMediumText,
+    airAnalysisAt: isoDateTime.nullable().optional(),
+    airAnalysisBy: z.string().max(255).nullable().optional(),
+    isolationLockoutMeasures: optionalLongText,
+    fencingAndSignsMeasures: optionalLongText,
+    fireSafetyMeasures: optionalLongText,
+    communicationOrAdjacentAreaApprovals: optionalLongText,
+    targetBriefingText: optionalLongText,
+    targetBriefingAt: isoDateTime.nullable().optional(),
+    targetBriefingInstructorId: optionalId,
+    admissionAt: isoDateTime.nullable().optional(),
+    admittedById: optionalId,
+    acceptedByWorkProducerAt: isoDateTime.nullable().optional(),
+    ppeRequirements: optionalMediumText,
     ppeIssueRecordIds: z.array(z.string()).default([]),
     legalBasis: z.array(z.string()).min(1),
     trainingEvidenceIds: z.array(z.string()).default([]),
@@ -268,6 +345,8 @@ export type PermitWorkType = z.infer<typeof permitWorkTypeSchema>;
 export type MvpPermitWorkType = z.infer<typeof mvpPermitWorkTypeSchema>;
 export type PermitStatus = z.infer<typeof permitStatusSchema>;
 export type PermitEntry = z.infer<typeof permitEntrySchema>;
+export type PermitJournalParty = z.infer<typeof permitJournalPartySchema>;
+export type PermitJournalRow = z.infer<typeof permitJournalRowSchema>;
 export type PermitSnapshot = z.infer<typeof permitSnapshotSchema>;
 export type PermitPrecheckCheck = z.infer<typeof permitPrecheckCheckSchema>;
 export type CreatePermitInput = z.infer<typeof createPermitSchema>;

@@ -28,6 +28,8 @@ describe("work permit lifecycle", () => {
     assert.throws(() => assertWorkPermitTransition("DRAFT", "ACTIVE"));
     assert.throws(() => assertWorkPermitTransition("IN_APPROVAL", "SIGNED"));
     assert.throws(() => assertWorkPermitTransition("CLOSED", "ACTIVE"));
+    assert.throws(() => assertWorkPermitTransition("ACTIVE", "CANCELLED"));
+    assert.throws(() => assertWorkPermitTransition("SUSPENDED", "CANCELLED"));
     assert.throws(() => assertWorkPermitTransition("ARCHIVED", "DRAFT"));
   });
 

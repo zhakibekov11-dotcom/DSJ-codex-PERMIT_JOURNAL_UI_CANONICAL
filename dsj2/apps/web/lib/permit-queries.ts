@@ -12,6 +12,14 @@ function scopedQuery(companyId: string | null | undefined) {
   return companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
 }
 
+function appendQuery(path: string, query: string, params: Record<string, string>) {
+  const search = new URLSearchParams(query.startsWith("?") ? query.slice(1) : "");
+  for (const [key, value] of Object.entries(params)) {
+    search.set(key, value);
+  }
+  return `${path}?${search.toString()}`;
+}
+
 function option(
   id: string,
   label: string,
@@ -30,6 +38,7 @@ export async function fetchPermitFormOptions(
     workSites,
     contractors,
     contractorWorkers,
+    contractorAccessActs,
     trainingAssignments,
     briefingEntries,
     employeeDocuments,
@@ -65,6 +74,23 @@ export async function fetchPermitFormOptions(
         contractorOrganization: { name: string };
       }>
     >(`core-platform/contractor-workers${query}`),
+    apiFetch<{
+      items: Array<{
+        id: string;
+        actNumber: string;
+        status: string;
+        validFrom: string;
+        validTo: string;
+        workArea: string;
+        contractorOrganizationId: string;
+        contractorOrganization?: { name: string; bin: string | null };
+      }>;
+    }>(
+      appendQuery("core-platform/contractor-access-acts", query, {
+        activeOnly: "true",
+        pageSize: "100",
+      }),
+    ),
     apiFetch<
       Array<{
         id: string;
@@ -206,6 +232,19 @@ export async function fetchPermitFormOptions(
       .map((contractor) =>
         option(contractor.id, contractor.name, contractor.bin),
       ),
+    contractorAccessActs: contractorAccessActs.items.map((act) =>
+      option(
+        act.id,
+        `${act.actNumber} В· ${act.workArea}`,
+        [
+          act.contractorOrganization?.name ?? act.contractorOrganizationId,
+          act.status,
+          `${act.validFrom.slice(0, 10)} - ${act.validTo.slice(0, 10)}`,
+        ]
+          .filter(Boolean)
+          .join(" В· "),
+      ),
+    ),
     trainingEvidence: trainingAssignments.map((assignment) =>
       option(
         assignment.id,

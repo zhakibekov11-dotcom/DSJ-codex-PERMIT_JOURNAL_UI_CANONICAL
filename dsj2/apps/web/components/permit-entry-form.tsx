@@ -20,6 +20,7 @@ type PermitEntryFormProps = {
   workSites: PermitOption[];
   workSitesManageHref?: string;
   contractors: PermitOption[];
+  contractorAccessActs: PermitOption[];
   trainingEvidence: PermitOption[];
   briefingEvidence: PermitOption[];
   certificateEvidence: PermitOption[];
@@ -34,6 +35,10 @@ type PermitEntryFormProps = {
 
 function selected(values: string[] | undefined, value: string) {
   return values?.includes(value) ?? false;
+}
+
+function datetimeValue(value: string | null | undefined) {
+  return value ? value.slice(0, 16) : "";
 }
 
 function SelectOptions({ options }: { options: PermitOption[] }) {
@@ -94,6 +99,7 @@ export function PermitEntryForm({
   workSites,
   workSitesManageHref,
   contractors,
+  contractorAccessActs,
   trainingEvidence,
   briefingEvidence,
   certificateEvidence,
@@ -260,6 +266,16 @@ export function PermitEntryForm({
           disabled={locked}
         />
       </div>
+      <div className="space-y-1.5 lg:col-span-2">
+        <label className="text-sm font-medium text-slate-700">
+          Equipment / object of work
+        </label>
+        <Input
+          name="equipmentOrObject"
+          defaultValue={initialValues?.equipmentOrObject ?? ""}
+          disabled={locked}
+        />
+      </div>
 
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-slate-700">Подрядчик</label>
@@ -284,6 +300,22 @@ export function PermitEntryForm({
           <option value="">Не выбран</option>
           <SelectOptions options={contractorWorkers} />
         </Select>
+      </div>
+      <div className="space-y-1.5 lg:col-span-2">
+        <label className="text-sm font-medium text-slate-700">
+          РђРєС‚-РґРѕРїСѓСЃРє РїРѕРґСЂСЏРґС‡РёРєР°
+        </label>
+        <Select
+          name="contractorAccessActId"
+          defaultValue={initialValues?.contractorAccessActId ?? ""}
+          disabled={locked}
+        >
+          <option value="">РќРµ РІС‹Р±СЂР°РЅ</option>
+          <SelectOptions options={contractorAccessActs} />
+        </Select>
+        <p className="text-xs text-slate-500">
+          Р”Р»СЏ CONTRACTOR_SITE_ACCESS precheck Р±Р»РѕРєРёСЂСѓРµС‚ РѕС‚СЃСѓС‚СЃС‚РІРёРµ active Appendix 3 act.
+        </p>
       </div>
 
       {[
@@ -356,6 +388,204 @@ export function PermitEntryForm({
           required
           disabled={locked}
         />
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium text-slate-700">
+          Workplace preparation measures
+        </label>
+        <Textarea
+          name="workplacePreparationMeasures"
+          defaultValue={initialValues?.workplacePreparationMeasures ?? ""}
+          className="min-h-28"
+          disabled={locked}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium text-slate-700">
+          Safety measure executors
+        </label>
+        <Textarea
+          name="safetyMeasureExecutors"
+          defaultValue={initialValues?.safetyMeasureExecutors ?? ""}
+          className="min-h-28"
+          disabled={locked}
+        />
+      </div>
+
+      <div className="space-y-2 rounded-lg border border-slate-200 p-4 lg:col-span-2">
+        <p className="text-sm font-medium text-slate-900">
+          Appendix 1 controls
+        </p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              name="airAnalysisRequired"
+              defaultChecked={initialValues?.airAnalysisRequired ?? false}
+              disabled={locked}
+              className="h-4 w-4 rounded border-slate-300"
+            />
+            Air analysis required
+          </label>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Air analysis date/time
+            </label>
+            <Input
+              name="airAnalysisAt"
+              type="datetime-local"
+              defaultValue={datetimeValue(initialValues?.airAnalysisAt)}
+              disabled={locked}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Air analysis result
+            </label>
+            <Textarea
+              name="airAnalysisResult"
+              defaultValue={initialValues?.airAnalysisResult ?? ""}
+              className="min-h-20"
+              disabled={locked}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Air analysis by
+            </label>
+            <Input
+              name="airAnalysisBy"
+              defaultValue={initialValues?.airAnalysisBy ?? ""}
+              disabled={locked}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Isolation / lockout measures
+            </label>
+            <Textarea
+              name="isolationLockoutMeasures"
+              defaultValue={initialValues?.isolationLockoutMeasures ?? ""}
+              className="min-h-24"
+              disabled={locked}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Fencing and signs
+            </label>
+            <Textarea
+              name="fencingAndSignsMeasures"
+              defaultValue={initialValues?.fencingAndSignsMeasures ?? ""}
+              className="min-h-24"
+              disabled={locked}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Fire safety measures
+            </label>
+            <Textarea
+              name="fireSafetyMeasures"
+              defaultValue={initialValues?.fireSafetyMeasures ?? ""}
+              className="min-h-24"
+              disabled={locked}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Adjacent area approvals / communication
+            </label>
+            <Textarea
+              name="communicationOrAdjacentAreaApprovals"
+              defaultValue={
+                initialValues?.communicationOrAdjacentAreaApprovals ?? ""
+              }
+              className="min-h-24"
+              disabled={locked}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2 rounded-lg border border-slate-200 p-4 lg:col-span-2">
+        <p className="text-sm font-medium text-slate-900">
+          Target briefing and admission
+        </p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-1.5 lg:col-span-2">
+            <label className="text-sm font-medium text-slate-700">
+              Target briefing text
+            </label>
+            <Textarea
+              name="targetBriefingText"
+              defaultValue={initialValues?.targetBriefingText ?? ""}
+              className="min-h-24"
+              disabled={locked}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Target briefing date/time
+            </label>
+            <Input
+              name="targetBriefingAt"
+              type="datetime-local"
+              defaultValue={datetimeValue(initialValues?.targetBriefingAt)}
+              disabled={locked}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Briefing instructor
+            </label>
+            <Select
+              name="targetBriefingInstructorId"
+              defaultValue={initialValues?.targetBriefingInstructorId ?? ""}
+              disabled={locked}
+            >
+              <option value="">РќРµ РІС‹Р±СЂР°РЅ</option>
+              <SelectOptions options={employees} />
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Admission date/time
+            </label>
+            <Input
+              name="admissionAt"
+              type="datetime-local"
+              defaultValue={datetimeValue(initialValues?.admissionAt)}
+              disabled={locked}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Admitted by
+            </label>
+            <Select
+              name="admittedById"
+              defaultValue={initialValues?.admittedById ?? ""}
+              disabled={locked}
+            >
+              <option value="">РќРµ РІС‹Р±СЂР°РЅ</option>
+              <SelectOptions options={employees} />
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Work producer accepted at
+            </label>
+            <Input
+              name="acceptedByWorkProducerAt"
+              type="datetime-local"
+              defaultValue={datetimeValue(
+                initialValues?.acceptedByWorkProducerAt,
+              )}
+              disabled={locked}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="space-y-2 rounded-lg border border-slate-200 p-4 lg:col-span-2">

@@ -13,7 +13,7 @@ import {
   Th,
 } from "@dsj/ui";
 import { formatDateTime } from "@dsj/utils";
-import { Plus } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { CompanySwitcher } from "@/components/company-switcher";
 import { StatusBadge } from "@/components/status-badge";
 import { getDemoPersonaForEmail } from "@/lib/demo-personas";
@@ -21,12 +21,9 @@ import { requireRoleAccess } from "@/lib/auth";
 import { resolveCompanyContext } from "@/lib/company-context";
 import { fetchPermitFormOptions, fetchPermitPage } from "@/lib/permit-queries";
 import {
-  getEffectivePermitStatus,
-  getPermitEntry,
+  getPermitJournalRow,
   getPermitStatusLabel,
-  getPermitTypeLabel,
   getPermitWorkTypeLabel,
-  mvpPermitTypeOptions,
   mvpPermitWorkTypeOptions,
   permitStatusLabels,
 } from "@/lib/permits";
@@ -36,6 +33,30 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 function firstString(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0] ?? "";
   return typeof value === "string" ? value : "";
+}
+
+function displayDateTime(value: string | null | undefined) {
+  return value ? formatDateTime(value) : "Не применимо";
+}
+
+function displayText(value: string | null | undefined) {
+  return value && value.trim().length > 0 ? value : "Не указано";
+}
+
+function exportHref(
+  companyId: string | null,
+  params: Record<string, string | string[] | undefined>,
+) {
+  const exportParams = new URLSearchParams();
+  if (companyId) exportParams.set("organizationId", companyId);
+  for (const [key, rawValue] of Object.entries(params)) {
+    if (key === "companyId" || key === "page") continue;
+    const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+    if (value) exportParams.set(key, value);
+  }
+  exportParams.set("pageSize", "100");
+  const query = exportParams.toString();
+  return `/api/permits/journal.csv${query ? `?${query}` : ""}`;
 }
 
 export default async function PermitsPage({
@@ -66,6 +87,7 @@ export default async function PermitsPage({
     departments: [],
     workSites: [],
     contractors: [],
+    contractorAccessActs: [],
     trainingEvidence: [],
     briefingEvidence: [],
     certificateEvidence: [],
@@ -81,7 +103,8 @@ export default async function PermitsPage({
           : fetchPermitFormOptions(activeCompanyId),
       ])
     : [{ items: [], total: 0, page: 1, pageSize: 25 }, emptyOptions];
-  const filteredPermits = permitPage.items;
+  const permits = permitPage.items;
+  const csvHref = exportHref(activeCompanyId, params);
 
   return (
     <div className="space-y-6">
@@ -99,14 +122,15 @@ export default async function PermitsPage({
       <PageHeader>
         <div>
           <p className="text-sm uppercase tracking-[0.18em] text-slate-400">
-            PermitJournal
+            Appendix 2
           </p>
           <h1 className="mt-2 text-3xl font-semibold text-slate-950">
-            Журнал допусков и нарядов
+            Журнал нарядов-допусков
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-slate-500">
-            Контролируемый lifecycle допуска: precheck документов, согласование,
-            подписи, активация, закрытие, архив и evidence.
+            Учет выдачи нарядов-допусков по Приказу МТСЗН РК №344:
+            регистрация, первичный допуск, статус, срок действия, закрытие и
+            архив.
           </p>
         </div>
         <div className="flex flex-col gap-3">
@@ -116,19 +140,42 @@ export default async function PermitsPage({
             activeCompanyId={activeCompanyId}
             searchParams={params}
           />
-          {!isReadOnly ? (
-            <Link
-              href={
-                activeCompanyId
-                  ? `/permits/new?companyId=${activeCompanyId}`
-                  : "/permits/new"
-              }
-              className="inline-flex items-center gap-2 rounded-md bg-[var(--surface-strong)] px-4 py-2.5 text-sm font-medium text-white hover:bg-[var(--surface-strong-hover)]"
-            >
-              <Plus className="h-4 w-4" />
-              Создать допуск
-            </Link>
-          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {activeCompanyId ? (
+              <Link
+                href={csvHref}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <Download className="h-4 w-4" />
+                CSV
+              </Link>
+            ) : null}
+            {!isReadOnly ? (
+              <Link
+                href={
+                  activeCompanyId
+                    ? `/permits/contractor-access-acts?companyId=${activeCompanyId}`
+                    : "/permits/contractor-access-acts"
+                }
+                className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Appendix 3
+              </Link>
+            ) : null}
+            {!isReadOnly ? (
+              <Link
+                href={
+                  activeCompanyId
+                    ? `/permits/new?companyId=${activeCompanyId}`
+                    : "/permits/new"
+                }
+                className="inline-flex items-center gap-2 rounded-md bg-[var(--surface-strong)] px-4 py-2.5 text-sm font-medium text-white hover:bg-[var(--surface-strong-hover)]"
+              >
+                <Plus className="h-4 w-4" />
+                Создать наряд-допуск
+              </Link>
+            ) : null}
+          </div>
         </div>
       </PageHeader>
 
@@ -137,23 +184,12 @@ export default async function PermitsPage({
           <h2 className="text-lg font-semibold text-slate-950">Фильтры</h2>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-3 md:grid-cols-3 xl:grid-cols-[repeat(7,minmax(0,1fr))_auto]">
+          <form className="grid gap-3 md:grid-cols-3 xl:grid-cols-[repeat(6,minmax(0,1fr))_auto]">
             <input
               type="hidden"
               name="companyId"
               value={activeCompanyId ?? ""}
             />
-            <Select
-              name="permitType"
-              defaultValue={firstString(params.permitType)}
-            >
-              <option value="">Все типы</option>
-              {mvpPermitTypeOptions.map((value) => (
-                <option key={value} value={value}>
-                  {getPermitTypeLabel(value)}
-                </option>
-              ))}
-            </Select>
             <Select name="workType" defaultValue={firstString(params.workType)}>
               <option value="">Все виды работ</option>
               {mvpPermitWorkTypeOptions.map((value) => (
@@ -167,17 +203,6 @@ export default async function PermitsPage({
               {Object.entries(permitStatusLabels).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              name="departmentId"
-              defaultValue={firstString(params.departmentId)}
-            >
-              <option value="">Все подразделения</option>
-              {options.departments.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.label}
                 </option>
               ))}
             </Select>
@@ -202,142 +227,124 @@ export default async function PermitsPage({
               type="date"
               defaultValue={firstString(params.dateTo)}
             />
+            <div className="flex flex-col gap-2 text-sm text-slate-700">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="activeOnly"
+                  value="1"
+                  defaultChecked={firstString(params.activeOnly) === "1"}
+                />
+                Только активные
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="archivedOnly"
+                  value="1"
+                  defaultChecked={firstString(params.archivedOnly) === "1"}
+                />
+                Только архив
+              </label>
+            </div>
             <button className="rounded-md bg-[var(--surface-strong)] px-4 py-2.5 text-sm font-medium text-white hover:bg-[var(--surface-strong-hover)]">
               Применить
             </button>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                name="missingOnly"
-                value="1"
-                defaultChecked={firstString(params.missingOnly) === "1"}
-              />
-              Только с недостающими документами
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                name="activeOnly"
-                value="1"
-                defaultChecked={firstString(params.activeOnly) === "1"}
-              />
-              Только активные
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                name="archivedOnly"
-                value="1"
-                defaultChecked={firstString(params.archivedOnly) === "1"}
-              />
-              Только архивные
-            </label>
           </form>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <h2 className="text-lg font-semibold text-slate-950">Допуски</h2>
+          <h2 className="text-lg font-semibold text-slate-950">
+            Журнал учета выдачи
+          </h2>
         </CardHeader>
         <CardContent className="p-0">
-          {activeCompanyId && filteredPermits.length ? (
+          {activeCompanyId && permits.length ? (
             <TableWrapper className="border-0">
               <Table>
                 <thead>
                   <tr>
                     <Th>№ записи</Th>
-                    <Th>№ наряда-допуска</Th>
-                    <Th>Тип / вид работ</Th>
-                    <Th>Место / подразделение</Th>
-                    <Th>Сроки</Th>
+                    <Th>Первичный допуск</Th>
+                    <Th>Повторный допуск</Th>
+                    <Th>№ наряда</Th>
+                    <Th>Выдавший</Th>
+                    <Th>Характер работ</Th>
+                    <Th>Место / вид</Th>
                     <Th>Статус</Th>
-                    <Th>Проверки</Th>
-                    <Th>Подписи / архив</Th>
+                    <Th>Срок / закрытие</Th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPermits.map((permit) => {
-                    const entry = getPermitEntry(permit);
-                    const status = getEffectivePermitStatus(permit);
+                  {permits.map((permit) => {
+                    const journal = getPermitJournalRow(permit);
                     const query = activeCompanyId
                       ? `?companyId=${activeCompanyId}`
                       : "";
 
                     return (
                       <tr key={permit.id} className="border-t border-slate-100">
-                        <Td>{entry?.journalRegistrationNumber ?? "—"}</Td>
+                        <Td className="font-medium text-slate-950">
+                          {journal.journalRegistrationNumber}
+                        </Td>
+                        <Td>{displayDateTime(journal.initialAdmissionAt)}</Td>
+                        <Td>{displayDateTime(journal.repeatedAdmissionAt)}</Td>
                         <Td>
                           <Link
                             href={`/permits/${permit.id}${query}`}
-                            className="font-medium text-slate-900"
+                            className="font-medium text-slate-900 underline-offset-4 hover:underline"
                           >
-                            {entry?.permitNumber ?? permit.permitCode}
+                            {journal.permitNumber}
                           </Link>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {permit.id}
-                          </p>
                         </Td>
                         <Td>
-                          <p className="text-sm font-medium text-slate-900">
-                            {getPermitTypeLabel(entry?.permitType)}
+                          <p className="text-sm text-slate-900">
+                            {journal.issuer?.displayName ?? "Не назначен"}
                           </p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {getPermitWorkTypeLabel(entry?.workType)}
-                          </p>
+                          {journal.issuer?.sublabel ? (
+                            <p className="mt-1 text-xs text-slate-500">
+                              {journal.issuer.sublabel}
+                            </p>
+                          ) : null}
                         </Td>
-                        <Td>
-                          <p className="text-sm text-slate-700">
-                            {entry?.workplace ?? "—"}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {entry?.departmentId ??
-                              permit.departmentId ??
-                              "Без подразделения"}
+                        <Td className="max-w-72">
+                          <p className="line-clamp-3 text-sm text-slate-700">
+                            {journal.workDescription}
                           </p>
                         </Td>
                         <Td>
                           <p className="text-sm text-slate-700">
-                            {entry?.startAt
-                              ? formatDateTime(entry.startAt)
-                              : "—"}
+                            {displayText(journal.workplace)}
                           </p>
                           <p className="mt-1 text-xs text-slate-500">
-                            {entry?.endAt ? formatDateTime(entry.endAt) : "—"}
+                            {getPermitWorkTypeLabel(journal.workType)}
+                          </p>
+                          {journal.contractor ? (
+                            <p className="mt-1 text-xs text-slate-500">
+                              {journal.contractor.displayName}
+                            </p>
+                          ) : null}
+                        </Td>
+                        <Td>
+                          <StatusBadge value={journal.status} />
+                          <p className="mt-1 text-xs text-slate-500">
+                            {getPermitStatusLabel(journal.status)}
                           </p>
                         </Td>
                         <Td>
-                          <StatusBadge value={status} />
-                          <p className="mt-1 text-xs text-slate-500">
-                            {getPermitStatusLabel(status)}
-                          </p>
-                        </Td>
-                        <Td>
-                          <StatusBadge
-                            value={
-                              entry?.precheckSummary?.result === "PASS"
-                                ? "active"
-                                : entry?.precheckSummary?.result === "FAIL"
-                                  ? "blocked"
-                                  : "draft"
-                            }
-                          />
-                          <p className="mt-1 text-xs text-slate-500">
-                            {entry?.precheckSummary?.checkedAt
-                              ? formatDateTime(entry.precheckSummary.checkedAt)
-                              : "не запускался"}
-                          </p>
-                        </Td>
-                        <Td>
-                          <p className="text-xs text-slate-500">
-                            {permit.currentVersion?.documentEnvelopeId
-                              ? "Evidence подготовлен"
-                              : "Evidence не подготовлен"}
+                          <p className="text-sm text-slate-700">
+                            {displayDateTime(journal.validUntil)}
                           </p>
                           <p className="mt-1 text-xs text-slate-500">
-                            {entry?.retentionUntil
-                              ? `Хранить до ${entry.retentionUntil}`
-                              : "Архив не запечатан"}
+                            Закрыт: {displayDateTime(journal.closedAt)}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Архив:{" "}
+                            {journal.archivedAt
+                              ? displayDateTime(journal.archivedAt)
+                              : "не передан"}
                           </p>
                         </Td>
                       </tr>
@@ -349,7 +356,7 @@ export default async function PermitsPage({
           ) : (
             <EmptyState className="min-h-32 justify-center text-left">
               {activeCompanyId
-                ? "Допуски пока не созданы или не подходят под фильтры."
+                ? "Записи журнала не найдены по выбранным фильтрам."
                 : "Сначала выберите компанию."}
             </EmptyState>
           )}

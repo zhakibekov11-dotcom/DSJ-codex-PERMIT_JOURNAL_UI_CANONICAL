@@ -358,6 +358,8 @@ model Employee {
   protocolLinks   ProtocolEmployee[]
   responsibilityAppointments ResponsibilityAppointment[]
   signatures      Signature[]      @relation("EmployeeSignatures")
+  contractorAccessActsAsHostRepresentative ContractorAccessAct[] @relation("ContractorAccessActHostRepresentative")
+  contractorAccessActsAsHostUnitChief      ContractorAccessAct[] @relation("ContractorAccessActHostUnitChief")
   signingSessions SigningSession[] @relation("SigningSessionSignerEmployee")
   reminders       Reminder[]
   cardRequestItems CardGenerationRequestItem[]
@@ -1056,6 +1058,7 @@ model Organization {
   scopeGrants         ScopeGrant[]
   contractorOrganizations ContractorOrganization[]
   contractorWorkers   ContractorWorker[]
+  contractorAccessActs ContractorAccessAct[]
   clearanceTypes      ClearanceType[]
   trainingTypes       TrainingType[]
   documentTemplates   DocumentTemplate[]
@@ -1106,6 +1109,7 @@ model Branch {
   responsibilityOrders ResponsibilityOrder[]
   responsibilityAppointments ResponsibilityAppointment[]
   workPermits     WorkPermit[]
+  contractorAccessActs ContractorAccessAct[]
 
   @@unique([organizationId, code])
   @@index([organizationId, isActive])
@@ -1130,6 +1134,7 @@ model WorkSite {
   responsibilityOrders ResponsibilityOrder[]
   responsibilityAppointments ResponsibilityAppointment[]
   workPermits     WorkPermit[]
+  contractorAccessActs ContractorAccessAct[]
 
   @@unique([organizationId, code])
   @@index([organizationId, isActive])
@@ -1194,6 +1199,7 @@ model ContractorOrganization {
   updatedAt       DateTime   @updatedAt
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workers         ContractorWorker[]
+  contractorAccessActs ContractorAccessAct[]
 
   @@unique([organizationId, code])
   @@index([organizationId, isActive])
@@ -1221,6 +1227,7 @@ model ContractorWorker {
   qualificationDocuments  QualificationDocument[]
   brigadeMembers          BrigadeMember[]
   responsibleAssignments  ResponsibleAssignment[]
+  contractorAccessActsAsRepresentative ContractorAccessAct[] @relation("ContractorAccessActRepresentative")
 
   @@unique([organizationId, iinHash])
   @@unique([organizationId, workerNumber])
@@ -1290,6 +1297,7 @@ enum DocumentKind {
   BRIEFING_JOURNAL_ENTRY
   PROTOCOL
   WORK_PERMIT
+  CONTRACTOR_ACCESS_ACT
 }
 
 enum DocumentEnvelopeStatus {
@@ -1472,6 +1480,7 @@ model DocumentEnvelope {
   protocol        Protocol?
   responsibilityOrder ResponsibilityOrder?
   workPermit             WorkPermit?
+  contractorAccessAct    ContractorAccessAct?
   workPermitVersions WorkPermitVersion[]
   qualificationDocuments QualificationDocument[]
 
@@ -1500,6 +1509,7 @@ model DocumentVersion {
   currentForEnvelope DocumentEnvelope[] @relation("CurrentEnvelopeVersion")
   currentForProtocols Protocol[] @relation("CurrentProtocolVersion")
   currentForResponsibilityOrders ResponsibilityOrder[] @relation("CurrentResponsibilityOrderVersion")
+  currentForContractorAccessActs ContractorAccessAct[] @relation("CurrentContractorAccessActVersion")
   workPermitVersion              WorkPermitVersion?
   signatures      Signature[] @relation("VersionSignatures")
   signingSessions SigningSession[]
@@ -1608,6 +1618,7 @@ model RetentionPolicy {
   protocols       Protocol[]
   responsibilityOrders ResponsibilityOrder[]
   workPermits                 WorkPermit[]
+  contractorAccessActs        ContractorAccessAct[]
   archiveRecords   ArchiveRecord[]
 
   @@unique([organizationId, retentionCode, effectiveFrom])
@@ -1637,6 +1648,7 @@ model ArchiveRecord {
   protocols       Protocol[] @relation("ProtocolArchiveRecord")
   responsibilityOrders ResponsibilityOrder[] @relation("ResponsibilityOrderArchiveRecord")
   workPermits          WorkPermit[]          @relation("WorkPermitArchiveRecord")
+  contractorAccessActs ContractorAccessAct[] @relation("ContractorAccessActArchiveRecord")
 
   @@index([organizationId, envelopeId])
   @@index([organizationId, status])
@@ -1815,6 +1827,14 @@ enum PpeIssueStatus {
   RETURNED
   EXPIRED
   CANCELLED
+}
+
+enum ContractorAccessActStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+  CANCELLED
+  ARCHIVED
 }
 
 enum ProtocolStatus {
@@ -2102,6 +2122,7 @@ model WorkPermit {
   workSiteId      String?
   contractorOrganizationId     String?
   contractorRepresentativeId   String?
+  contractorAccessActId        String?
   issuerEmployeeId             String?
   responsibleManagerEmployeeId String?
   workProducerEmployeeId       String?
@@ -2135,6 +2156,7 @@ model WorkPermit {
   currentVersion  WorkPermitVersion? @relation("CurrentWorkPermitVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
   archiveRecord                ArchiveRecord?          @relation("WorkPermitArchiveRecord", fields: [archiveRecordId], references: [id], onDelete: SetNull)
   retentionPolicy              RetentionPolicy?        @relation(fields: [retentionPolicyId], references: [id], onDelete: SetNull)
+  contractorAccessAct          ContractorAccessAct?     @relation(fields: [contractorAccessActId], references: [id], onDelete: SetNull)
   versions        WorkPermitVersion[]
   brigades        Brigade[]
   approvals                    WorkPermitApproval[]
@@ -2147,6 +2169,64 @@ model WorkPermit {
   @@index([organizationId, status, effectiveFrom])
   @@index([organizationId, permitType, workType])
   @@index([organizationId, contractorOrganizationId])
+  @@index([organizationId, contractorAccessActId])
+}
+
+model ContractorAccessAct {
+  id                              String                    @id @default(cuid())
+  organizationId                  String
+  actNumber                       String
+  status                          ContractorAccessActStatus @default(DRAFT)
+  scopeType                       ScopeType
+  branchId                        String?
+  departmentId                    String?
+  workSiteId                      String?
+  contractorOrganizationId        String
+  contractorRepresentativeId      String?
+  hostRepresentativeEmployeeId    String?
+  hostUnitChiefEmployeeId         String?
+  workName                        String
+  workDescription                 String?                   @db.Text
+  workArea                        String                    @db.Text
+  workAreaBoundaries              String?                   @db.Text
+  workAreaCoordinates             Json?
+  validFrom                       DateTime
+  validTo                         DateTime
+  safetyMeasures                  Json
+  specialConditions               String?                   @db.Text
+  legalBasis                      String                    @db.Text
+  legalBasisVersion               String
+  legalBasisEffectiveDate         DateTime
+  documentEnvelopeId              String?                   @unique
+  currentVersionId                String?
+  signedAt                        DateTime?
+  closedAt                        DateTime?
+  cancelledAt                     DateTime?
+  cancellationReason              String?                   @db.Text
+  archivedAt                      DateTime?
+  archiveRecordId                 String?
+  retentionPolicyId               String?
+  createdByUserId                 String?
+  updatedByUserId                 String?
+  createdAt                       DateTime                  @default(now())
+  updatedAt                       DateTime                  @updatedAt
+  organization                    Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch                          Branch?                   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  workSite                        WorkSite?                 @relation(fields: [workSiteId], references: [id], onDelete: SetNull)
+  contractorOrganization          ContractorOrganization    @relation(fields: [contractorOrganizationId], references: [id], onDelete: Restrict)
+  contractorRepresentative        ContractorWorker?         @relation("ContractorAccessActRepresentative", fields: [contractorRepresentativeId], references: [id], onDelete: SetNull)
+  hostRepresentativeEmployee      Employee?                 @relation("ContractorAccessActHostRepresentative", fields: [hostRepresentativeEmployeeId], references: [id], onDelete: SetNull)
+  hostUnitChiefEmployee           Employee?                 @relation("ContractorAccessActHostUnitChief", fields: [hostUnitChiefEmployeeId], references: [id], onDelete: SetNull)
+  documentEnvelope                DocumentEnvelope?         @relation(fields: [documentEnvelopeId], references: [id], onDelete: SetNull)
+  currentVersion                  DocumentVersion?          @relation("CurrentContractorAccessActVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  archiveRecord                   ArchiveRecord?            @relation("ContractorAccessActArchiveRecord", fields: [archiveRecordId], references: [id], onDelete: SetNull)
+  retentionPolicy                 RetentionPolicy?          @relation(fields: [retentionPolicyId], references: [id], onDelete: SetNull)
+  workPermits                     WorkPermit[]
+
+  @@unique([organizationId, actNumber])
+  @@index([organizationId, status, validFrom])
+  @@index([organizationId, contractorOrganizationId])
+  @@index([organizationId, scopeType, branchId, departmentId, workSiteId])
 }
 
 model WorkPermitVersion {

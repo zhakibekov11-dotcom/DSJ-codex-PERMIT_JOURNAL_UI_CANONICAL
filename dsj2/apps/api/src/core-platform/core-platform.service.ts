@@ -603,6 +603,26 @@ export class CorePlatformService {
       };
     }
 
+    if (args.documentKind === "CONTRACTOR_ACCESS_ACT") {
+      return {
+        id: null,
+        organizationId: args.organizationId,
+        retentionCode: "CONTRACTOR_ACCESS_ACT_344_APPENDIX_3_1Y",
+        documentKind: args.documentKind,
+        scopeType: args.scopeType,
+        retentionValue: 1,
+        retentionUnit: "YEARS" as const,
+        archiveFormat: "PDF_A_1" as const,
+        legalBasis:
+          "Order No. 344 Appendix 3 baseline: contractor access acts are retained for one year from closure or cancellation.",
+        holdAllowed: true,
+        destructionApprovalRequired: false,
+        effectiveFrom: BASELINE_RETENTION_EFFECTIVE_FROM,
+        effectiveTo: null,
+        description: "Baseline retention fallback for contractor access acts.",
+      };
+    }
+
     return null;
   }
 

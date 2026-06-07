@@ -14,6 +14,17 @@ const migration = readFileSync(
   "utf8",
 );
 
+const contractorAccessActMigration = readFileSync(
+  join(
+    process.cwd(),
+    "prisma",
+    "migrations",
+    "202606071200_contractor_access_act",
+    "migration.sql",
+  ),
+  "utf8",
+);
+
 describe("work permit migration", () => {
   it("creates the complete empty-database surface", () => {
     for (const table of [
@@ -43,6 +54,35 @@ describe("work permit migration", () => {
       migration,
       /ALTER TYPE "WorkPermitStatus" ADD VALUE IF NOT EXISTS/,
     );
+    assert.match(
+      migration,
+      /WorkPermit_organizationId_journalRegistrationNumber_key/,
+    );
     assert.match(migration, /EXCEPTION WHEN duplicate_object THEN NULL/);
+  });
+});
+
+describe("contractor access act migration", () => {
+  it("creates the Appendix 3 contractor access act surface", () => {
+    assert.match(
+      contractorAccessActMigration,
+      /CREATE TYPE "ContractorAccessActStatus"/,
+    );
+    assert.match(
+      contractorAccessActMigration,
+      /CREATE TABLE IF NOT EXISTS "ContractorAccessAct"/,
+    );
+    assert.match(
+      contractorAccessActMigration,
+      /ADD COLUMN IF NOT EXISTS "contractorAccessActId"/,
+    );
+    assert.match(
+      contractorAccessActMigration,
+      /CONTRACTOR_ACCESS_ACT/,
+    );
+    assert.match(
+      contractorAccessActMigration,
+      /ContractorAccessAct_organizationId_actNumber_key/,
+    );
   });
 });

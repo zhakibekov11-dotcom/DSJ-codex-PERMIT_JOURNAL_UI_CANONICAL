@@ -89,6 +89,7 @@ export default async function NewPermitPage({
               `/permits/new${effectiveCompanyId ? `?companyId=${effectiveCompanyId}` : ""}`,
             )}
             contractors={options.contractors}
+            contractorAccessActs={options.contractorAccessActs}
             trainingEvidence={options.trainingEvidence}
             briefingEvidence={options.briefingEvidence}
             certificateEvidence={options.certificateEvidence}

@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import PDFDocument from "pdfkit";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { formatDate, formatDateTime } from "@dsj/utils";
 import { assertReadablePath } from "../common/utils/runtime-dependencies";
 import { resolveWorkspacePath } from "../common/utils/workspace-path";
@@ -166,24 +166,104 @@ type WorkPermitPdf = {
   permitType: string;
   workType: string;
   status: string;
+  draft: boolean;
+  organizationName: string;
+  branchName: string | null;
+  workSiteName: string | null;
   workDescription: string;
   workplace: string;
+  equipmentOrObject: string | null;
+  issuedAt: Date | null;
   effectiveFrom: Date | null;
   effectiveTo: Date | null;
-  closedAt: Date | null;
+  legalBasis: string[];
+  legalBasisVersion: string | null;
+  legalBasisEffectiveDate: string | null;
+  responsiblePeople: Array<{
+    role: string;
+    name: string;
+  }>;
+  contractor: {
+    name: string;
+    representative: string | null;
+    accessActNumber: string | null;
+    accessActValidFrom: Date | null;
+    accessActValidTo: Date | null;
+    workArea: string | null;
+  } | null;
+  crew: Array<{
+    name: string;
+    role: string;
+    subjectType: string;
+    acknowledgementStatus: string | null;
+  }>;
+  hazardFactors: string[];
+  safetyMeasures: string;
+  workplacePreparationMeasures: string | null;
+  ppeRequirements: string | null;
+  isolationLockoutMeasures: string | null;
+  fencingAndSignsMeasures: string | null;
+  fireSafetyMeasures: string | null;
+  airAnalysis: string | null;
+  targetBriefing: {
+    text: string | null;
+    at: Date | null;
+    instructor: string | null;
+    acknowledgements: string;
+  };
+  precheck: {
+    result: string;
+    checkedAt: Date | null;
+    blockerCount: number;
+    warningCount: number;
+    checks: Array<{
+      code: string;
+      result: string;
+      severity: string;
+    }>;
+  } | null;
+  admission: {
+    admissionAt: Date | null;
+    admittedBy: string | null;
+    acceptedByWorkProducerAt: Date | null;
+  };
+  closure: {
+    closedAt: Date;
+    result: string;
+    inspection: string;
+    closedBy: string | null;
+    notes: string | null;
+  } | null;
   payloadHash: string | null;
   signedPayloadHash: string | null;
-  approvals: Array<{
-    stepNo: number;
-    role: string;
-    status: string;
-    decidedAt: Date | null;
-  }>;
+  documentVersionHash: string | null;
+  documentVersionId: string | null;
   signatures: Array<{
     signerName: string;
+    signerRole: string | null;
+    provider: string;
+    status: string;
     certificateSerial: string;
     signedAt: Date | null;
     verification: string | null;
+  }>;
+  generatedAt: Date;
+  generatedBy: string;
+};
+
+type WorkPermitJournalPdf = {
+  generatedAt: Date;
+  records: Array<{
+    journalRegistrationNumber: string;
+    permitNumber: string;
+    issuedAt: Date | null;
+    initialAdmissionAt: Date | null;
+    issuer: string | null;
+    workDescription: string;
+    workplace: string;
+    status: string;
+    validUntil: Date | null;
+    closedAt: Date | null;
   }>;
 };
 
@@ -271,6 +351,48 @@ const BIOT_ITR_CERTIFICATE_DATE_FORMATTER = new Intl.DateTimeFormat("ru-RU", {
 
 @Injectable()
 export class PdfService {
+  private async configureUnicodeFont(
+    document: InstanceType<typeof PDFDocument>,
+  ) {
+    const regularCandidates = [
+      process.env.DSJ_PDF_FONT_REGULAR,
+      "C:\\Windows\\Fonts\\arial.ttf",
+      "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+      "/System/Library/Fonts/Supplemental/Arial.ttf",
+    ].filter((candidate): candidate is string => Boolean(candidate));
+    const boldCandidates = [
+      process.env.DSJ_PDF_FONT_BOLD,
+      "C:\\Windows\\Fonts\\arialbd.ttf",
+      "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+      "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    ].filter((candidate): candidate is string => Boolean(candidate));
+
+    const firstReadable = async (candidates: string[]) => {
+      for (const candidate of candidates) {
+        try {
+          await access(candidate);
+          return candidate;
+        } catch {
+          // Try the next platform font.
+        }
+      }
+      return null;
+    };
+    const [regular, bold] = await Promise.all([
+      firstReadable(regularCandidates),
+      firstReadable(boldCandidates),
+    ]);
+    if (!regular) return null;
+
+    document.registerFont("DsjPermitRegular", regular);
+    document.registerFont("DsjPermitBold", bold ?? regular);
+    document.font("DsjPermitRegular");
+    return {
+      regular: "DsjPermitRegular",
+      bold: "DsjPermitBold",
+    };
+  }
+
   private finalize(document: InstanceType<typeof PDFDocument>) {
     return new Promise<Buffer>((resolve, reject) => {
       const chunks: Buffer[] = [];
@@ -597,73 +719,248 @@ export class PdfService {
     const document = new PDFDocument({
       margin: 48,
       size: "A4",
+      info: {
+        Title: `Work permit ${record.permitCode}`,
+        Subject: "Order No. 344, Appendix 1",
+        CreationDate: record.generatedAt,
+      },
     });
+    const fonts = await this.configureUnicodeFont(document);
+    const regular = fonts?.regular;
+    const bold = fonts?.bold;
+    const setRegular = () => {
+      if (regular) document.font(regular);
+      return document;
+    };
+    const setBold = () => {
+      if (bold) document.font(bold);
+      return document;
+    };
+    const value = (input: string | null | undefined) =>
+      input?.trim() ? input : "Не указано";
+    const dateTime = (input: Date | null) =>
+      input ? formatDateTime(input) : "Не указано";
+    const section = (title: string) => {
+      document.moveDown(0.75);
+      setBold().fillColor("#0f172a").fontSize(12).text(title);
+      document.moveDown(0.2);
+      setRegular().fontSize(9.5);
+    };
+    const line = (label: string, input: string | null | undefined) => {
+      setBold().text(`${label}: `, { continued: true });
+      setRegular().text(value(input));
+    };
 
-    document.fontSize(20).text("Work Permit");
-    document.moveDown(0.4);
-    document
-      .fontSize(12)
-      .fillColor("#475569")
-      .text("Controlled permit lifecycle and evidence summary");
-    document.moveDown(1.2);
-
-    document
+    if (record.draft) {
+      setBold()
+        .fontSize(15)
+        .fillColor("#b91c1c")
+        .text("DRAFT / НЕ ПОДПИСАНО", { align: "center" });
+      document.moveDown(0.4);
+    }
+    setBold()
       .fillColor("#0f172a")
-      .fontSize(11)
-      .text(`Permit number: ${record.permitCode}`)
-      .text(`Journal number: ${record.journalRegistrationNumber}`)
-      .text(`Permit type: ${record.permitType}`)
-      .text(`Work type: ${record.workType}`)
-      .text(`Status: ${record.status}`)
-      .text(`Workplace: ${record.workplace}`)
+      .fontSize(16)
       .text(
-        `Effective from: ${record.effectiveFrom ? formatDateTime(record.effectiveFrom) : "n/a"}`,
-      )
-      .text(
-        `Effective to: ${record.effectiveTo ? formatDateTime(record.effectiveTo) : "n/a"}`,
-      )
-      .text(
-        `Closed at: ${record.closedAt ? formatDateTime(record.closedAt) : "n/a"}`,
+        "Наряд-допуск на производство работ в условиях повышенной опасности",
+        { align: "center" },
       );
-
-    document.moveDown(0.8);
-    document.fontSize(13).text("Work description");
     document.moveDown(0.3);
-    document.fontSize(11).text(record.workDescription);
+    setRegular()
+      .fontSize(9.5)
+      .fillColor("#475569")
+      .text("Приказ МТСЗН РК от 28.08.2020 №344, Приложение 1", {
+        align: "center",
+      });
 
-    document.moveDown(0.8);
-    document.fontSize(13).text("Approval decisions");
-    document.moveDown(0.3);
-    record.approvals.forEach((approval) => {
-      document
-        .fontSize(11)
-        .text(
-          `${approval.stepNo}. ${approval.role}: ${approval.status}` +
-            (approval.decidedAt
-              ? ` at ${formatDateTime(approval.decidedAt)}`
-              : ""),
+    section("1. Правовое основание и регистрация");
+    line("Основание", record.legalBasis.join(", "));
+    line("Версия основания", record.legalBasisVersion);
+    line("Дата действия основания", record.legalBasisEffectiveDate);
+    line("Номер наряда", record.permitCode);
+    line("Номер записи журнала", record.journalRegistrationNumber);
+    line("Организация", record.organizationName);
+    line("Подразделение / филиал", record.branchName);
+    line("Участок / объект", record.workSiteName);
+    line("Дата выдачи", dateTime(record.issuedAt));
+    line(
+      "Срок действия",
+      `${dateTime(record.effectiveFrom)} - ${dateTime(record.effectiveTo)}`,
+    );
+    line("Статус", record.status);
+
+    section("2. Работы");
+    line("Место работ", record.workplace);
+    line("Объект / оборудование", record.equipmentOrObject);
+    line("Характер работ", record.workDescription);
+    line("Тип наряда", record.permitType);
+    line("Вид работ", record.workType);
+
+    section("3. Ответственные лица");
+    if (record.responsiblePeople.length) {
+      record.responsiblePeople.forEach((person) =>
+        line(person.role, person.name),
+      );
+    } else {
+      setRegular().text("Не указано");
+    }
+
+    section("4. Подрядчик");
+    if (record.contractor) {
+      line("Подрядная организация", record.contractor.name);
+      line("Представитель подрядчика", record.contractor.representative);
+      line("Акт-допуск", record.contractor.accessActNumber);
+      line(
+        "Срок акта-допуска",
+        record.contractor.accessActNumber
+          ? `${dateTime(record.contractor.accessActValidFrom)} - ${dateTime(record.contractor.accessActValidTo)}`
+          : null,
+      );
+      line("Рабочая зона", record.contractor.workArea);
+    } else {
+      setRegular().text("Не применяется");
+    }
+
+    section("5. Состав бригады");
+    if (record.crew.length) {
+      record.crew.forEach((member, index) => {
+        setRegular().text(
+          `${index + 1}. ${member.name} | ${member.subjectType} | ${member.role} | acknowledgement: ${member.acknowledgementStatus ?? "не указано"}`,
         );
-    });
+      });
+    } else {
+      setRegular().text("Не указано");
+    }
 
-    document.moveDown(0.8);
-    document.fontSize(13).text("Signatures");
-    document.moveDown(0.3);
-    record.signatures.forEach((signature, index) => {
-      document
-        .fontSize(11)
-        .text(`${index + 1}. ${signature.signerName}`)
-        .text(`   Certificate: ${signature.certificateSerial}`)
-        .text(
-          `   Signed at: ${signature.signedAt ? formatDateTime(signature.signedAt) : "n/a"}`,
-        )
-        .text(`   Verification: ${signature.verification ?? "pending"}`);
-    });
+    section("6. Опасные факторы");
+    setRegular().text(value(record.hazardFactors.join("; ")));
 
-    document.moveDown(0.8);
-    document.fontSize(9).fillColor("#475569");
+    section("7. Меры безопасности и подготовка рабочего места");
+    line("Меры безопасности", record.safetyMeasures);
+    line("Подготовка рабочего места", record.workplacePreparationMeasures);
+    line("Требования к СИЗ", record.ppeRequirements);
+    line("Отключение / изоляция / блокировка", record.isolationLockoutMeasures);
+    line("Ограждения и знаки", record.fencingAndSignsMeasures);
+    line("Пожарная безопасность", record.fireSafetyMeasures);
+    line("Анализ воздушной среды", record.airAnalysis);
+
+    section("8. Целевой инструктаж");
+    line("Содержание", record.targetBriefing.text);
+    line("Проведен", dateTime(record.targetBriefing.at));
+    line("Инструктирующий", record.targetBriefing.instructor);
+    line("Подтверждения бригады", record.targetBriefing.acknowledgements);
+
+    section("9. Precheck допуска");
+    if (record.precheck) {
+      line("Результат", record.precheck.result);
+      line("Проверено", dateTime(record.precheck.checkedAt));
+      line("Blockers", String(record.precheck.blockerCount));
+      line("Warnings", String(record.precheck.warningCount));
+      setRegular().text(
+        record.precheck.checks
+          .map((check) => `${check.code}: ${check.result} (${check.severity})`)
+          .join("; "),
+      );
+    } else {
+      setRegular().text("Precheck не выполнялся");
+    }
+
+    section("10. Допуск к работам");
+    line("Допуск", dateTime(record.admission.admissionAt));
+    line("Допускающий", record.admission.admittedBy);
+    line(
+      "Принято производителем работ",
+      dateTime(record.admission.acceptedByWorkProducerAt),
+    );
+
+    section("11. Закрытие");
+    if (record.closure) {
+      line("Закрыт", dateTime(record.closure.closedAt));
+      line("Результат", record.closure.result);
+      line("Осмотр", record.closure.inspection);
+      line("Закрыл", record.closure.closedBy);
+      line("Примечания", record.closure.notes);
+    } else {
+      setRegular().text("Не закрыт");
+    }
+
+    section("12. Подписи и evidence");
+    if (record.signatures.length) {
+      record.signatures.forEach((signature, index) => {
+        setRegular().text(
+          `${index + 1}. ${signature.signerName} | ${signature.signerRole ?? "роль не указана"} | ${signature.provider} | ${signature.status} | certificate ${signature.certificateSerial} | ${dateTime(signature.signedAt)} | verification ${signature.verification ?? "не выполнена"}`,
+        );
+      });
+    } else {
+      setRegular().text("Подписи отсутствуют");
+    }
+
+    document.moveDown(1);
+    setRegular().fontSize(7.5).fillColor("#475569");
+    document.text(`Document version: ${record.documentVersionId ?? "n/a"}`);
+    document.text(
+      `Document version hash: ${record.documentVersionHash ?? "n/a"}`,
+    );
     document.text(`Payload hash: ${record.payloadHash ?? "n/a"}`);
     document.text(`Signed payload hash: ${record.signedPayloadHash ?? "n/a"}`);
+    document.text(`Generated at: ${formatDateTime(record.generatedAt)}`);
+    document.text(`Generated by: ${record.generatedBy}`);
+    document.text(
+      "Medical evidence is limited to clearance status/validity references. containsDiagnosis: false.",
+    );
 
+    return this.finalize(document);
+  }
+
+  async renderWorkPermitJournal(record: WorkPermitJournalPdf) {
+    const document = new PDFDocument({
+      margin: 32,
+      size: "A4",
+      layout: "landscape",
+      info: {
+        Title: "Work permit journal",
+        Subject: "Order No. 344, Appendix 2",
+        CreationDate: record.generatedAt,
+      },
+    });
+    const fonts = await this.configureUnicodeFont(document);
+    if (fonts) document.font(fonts.bold);
+    document
+      .fontSize(15)
+      .text("Журнал учета выдачи нарядов-допусков", { align: "center" });
+    if (fonts) document.font(fonts.regular);
+    document
+      .fontSize(9)
+      .fillColor("#475569")
+      .text("Приказ МТСЗН РК от 28.08.2020 №344, Приложение 2", {
+        align: "center",
+      });
+    document.moveDown(0.8);
+    document.fillColor("#0f172a").fontSize(7.5);
+    record.records.forEach((item) => {
+      document.text(
+        [
+          item.journalRegistrationNumber,
+          item.permitNumber,
+          item.issuedAt ? formatDateTime(item.issuedAt) : "Не указано",
+          item.initialAdmissionAt
+            ? formatDateTime(item.initialAdmissionAt)
+            : "Не указано",
+          item.issuer ?? "Не указано",
+          item.workDescription,
+          item.workplace,
+          item.status,
+          item.validUntil ? formatDateTime(item.validUntil) : "Не указано",
+          item.closedAt ? formatDateTime(item.closedAt) : "Не указано",
+        ].join(" | "),
+      );
+      document.moveDown(0.3);
+    });
+    document.moveDown(0.5);
+    document
+      .fontSize(7)
+      .fillColor("#475569")
+      .text(`Generated at: ${formatDateTime(record.generatedAt)}`);
     return this.finalize(document);
   }
 

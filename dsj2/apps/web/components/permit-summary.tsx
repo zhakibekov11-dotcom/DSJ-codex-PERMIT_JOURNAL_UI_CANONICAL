@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/status-badge";
 import {
   getEffectivePermitStatus,
   getPermitEntry,
+  getPermitJournalRow,
   getPermitStatusLabel,
   getPermitTypeLabel,
   getPermitWorkTypeLabel,
@@ -29,7 +30,13 @@ function legalBasisLabel(key: string) {
   return basis ? `${basis.label} (${basis.marker})` : key;
 }
 
-export function PermitWorkflowNav({ permitId, companyId }: { permitId: string; companyId: string | null }) {
+export function PermitWorkflowNav({
+  permitId,
+  companyId,
+}: {
+  permitId: string;
+  companyId: string | null;
+}) {
   const query = companyId ? `?companyId=${companyId}` : "";
   const items = [
     ["/precheck", "Precheck"],
@@ -41,7 +48,10 @@ export function PermitWorkflowNav({ permitId, companyId }: { permitId: string; c
 
   return (
     <div className="flex flex-wrap gap-2">
-      <Link className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" href={`/permits/${permitId}${query}`}>
+      <Link
+        className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+        href={`/permits/${permitId}${query}`}
+      >
         Карточка
       </Link>
       {items.map(([suffix, label]) => (
@@ -57,10 +67,17 @@ export function PermitWorkflowNav({ permitId, companyId }: { permitId: string; c
   );
 }
 
-export function PermitSummary({ permit, companyId, readOnly = false }: PermitSummaryProps) {
+export function PermitSummary({
+  permit,
+  companyId,
+  readOnly = false,
+}: PermitSummaryProps) {
   const entry = getPermitEntry(permit);
+  const journal = getPermitJournalRow(permit);
   const status = getEffectivePermitStatus(permit);
   const query = companyId ? `?companyId=${companyId}` : "";
+  const contractorAccessAct =
+    permit.contractorAccessAct ?? entry?.contractorAccessAct ?? null;
 
   return (
     <div className="space-y-6">
@@ -68,12 +85,16 @@ export function PermitSummary({ permit, companyId, readOnly = false }: PermitSum
         <CardHeader>
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
             <div>
-              <p className="text-sm uppercase tracking-[0.18em] text-slate-400">PermitEntry</p>
+              <p className="text-sm uppercase tracking-[0.18em] text-slate-400">
+                PermitEntry
+              </p>
               <h2 className="mt-2 text-xl font-semibold text-slate-950">
                 {entry?.permitNumber ?? permit.permitCode}
               </h2>
               <p className="mt-2 text-sm text-slate-500">
-                {entry ? getPermitTypeLabel(entry.permitType) : "Канонический payload не найден"}
+                {entry
+                  ? getPermitTypeLabel(entry.permitType)
+                  : "Канонический payload не найден"}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -91,36 +112,251 @@ export function PermitSummary({ permit, companyId, readOnly = false }: PermitSum
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Fact label="Вид работ" value={entry ? getPermitWorkTypeLabel(entry.workType) : permit.permitType} />
-          <Fact label="№ записи в журнале" value={entry?.journalRegistrationNumber} />
+          <Fact
+            label="Вид работ"
+            value={
+              entry ? getPermitWorkTypeLabel(entry.workType) : permit.permitType
+            }
+          />
+          <Fact
+            label="№ записи в журнале"
+            value={entry?.journalRegistrationNumber}
+          />
           <Fact label="Место работ" value={entry?.workplace} />
-          <Fact label="Срок" value={entry?.startAt ? `${formatDateTime(entry.startAt)} - ${entry.endAt ? formatDateTime(entry.endAt) : "—"}` : "—"} />
-          <Fact label="Подразделение" value={entry?.departmentId ?? permit.departmentId} />
-          <Fact label="Объект" value={permit.workSite?.name ?? entry?.workZoneId ?? permit.workSiteId} />
-          <Fact label="Ответственный руководитель" value={entry?.responsibleManagerId} />
+          <Fact
+            label="Срок"
+            value={
+              entry?.startAt
+                ? `${formatDateTime(entry.startAt)} - ${entry.endAt ? formatDateTime(entry.endAt) : "—"}`
+                : "—"
+            }
+          />
+          <Fact
+            label="Подразделение"
+            value={entry?.departmentId ?? permit.departmentId}
+          />
+          <Fact
+            label="Объект"
+            value={
+              permit.workSite?.name ?? entry?.workZoneId ?? permit.workSiteId
+            }
+          />
+          <Fact
+            label="Ответственный руководитель"
+            value={entry?.responsibleManagerId}
+          />
           <Fact label="Производитель работ" value={entry?.workProducerId} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold text-slate-950">
+            Журнальная запись
+          </h2>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Fact label="№ записи" value={journal.journalRegistrationNumber} />
+          <Fact label="№ наряда" value={journal.permitNumber} />
+          <Fact
+            label="Первичный допуск"
+            value={
+              journal.initialAdmissionAt
+                ? formatDateTime(journal.initialAdmissionAt)
+                : null
+            }
+          />
+          <Fact
+            label="Повторный допуск"
+            value={
+              journal.repeatedAdmissionAt
+                ? formatDateTime(journal.repeatedAdmissionAt)
+                : null
+            }
+          />
+          <Fact
+            label="Выдавший"
+            value={journal.issuer?.displayName ?? entry?.issuerId}
+          />
+          <Fact
+            label="Lifecycle"
+            value={getPermitStatusLabel(journal.status)}
+          />
+          <Fact
+            label="Дата закрытия"
+            value={journal.closedAt ? formatDateTime(journal.closedAt) : null}
+          />
+          <Fact
+            label="Archive / retention"
+            value={[
+              journal.archivedAt
+                ? `archivedAt: ${formatDateTime(journal.archivedAt)}`
+                : "archivedAt: n/a",
+              journal.retentionUntil
+                ? `retentionUntil: ${formatDateTime(journal.retentionUntil)}`
+                : "retentionUntil: n/a",
+            ].join("\n")}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+            <h2 className="text-lg font-semibold text-slate-950">
+              РђРєС‚-РґРѕРїСѓСЃРє РїРѕРґСЂСЏРґС‡РёРєР°
+            </h2>
+            {contractorAccessAct ? (
+              <Link
+                href={`/permits/contractor-access-acts${companyId ? `?companyId=${companyId}&actId=${contractorAccessAct.id}` : `?actId=${contractorAccessAct.id}`}`}
+                className="text-sm font-medium text-slate-700 underline"
+              >
+                РћС‚РєСЂС‹С‚СЊ Р°РєС‚
+              </Link>
+            ) : null}
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Fact
+            label="РќРѕРјРµСЂ Р°РєС‚Р°"
+            value={contractorAccessAct?.actNumber ?? null}
+          />
+          <Fact
+            label="РЎСЂРѕРє РґРµР№СЃС‚РІРёСЏ"
+            value={
+              contractorAccessAct
+                ? `${formatDateTime(contractorAccessAct.validFrom)} - ${formatDateTime(contractorAccessAct.validTo)}`
+                : null
+            }
+          />
+          <Fact
+            label="Р—РѕРЅР° СЂР°Р±РѕС‚"
+            value={contractorAccessAct?.workArea ?? null}
+          />
+          <Fact
+            label="РЎС‚Р°С‚СѓСЃ"
+            value={contractorAccessAct?.status ?? null}
+          />
+          <Fact
+            label="РџРѕРґСЂСЏРґС‡РёРє"
+            value={
+              permit.contractorAccessAct?.contractorOrganization?.name ??
+              contractorAccessAct?.contractorOrganizationId ??
+              null
+            }
+          />
+          <Fact
+            label="РџСЂРµРґСЃС‚Р°РІРёС‚РµР»СЊ"
+            value={
+              permit.contractorAccessAct?.contractorRepresentative?.fullName ??
+              contractorAccessAct?.contractorRepresentativeId ??
+              null
+            }
+          />
         </CardContent>
       </Card>
 
       {entry ? (
         <Card>
           <CardHeader>
-            <h2 className="text-lg font-semibold text-slate-950">Условия допуска</h2>
+            <h2 className="text-lg font-semibold text-slate-950">
+              Условия допуска
+            </h2>
           </CardHeader>
           <CardContent className="grid gap-4 lg:grid-cols-2">
             <TextBlock label="Описание работ" value={entry.workDescription} />
             <TextBlock label="Меры безопасности" value={entry.safetyMeasures} />
-            <TextBlock label="Опасные факторы" value={entry.hazardFactors.join(", ")} />
+            <TextBlock
+              label="Опасные факторы"
+              value={entry.hazardFactors.join(", ")}
+            />
             <TextBlock label="СИЗ" value={entry.ppeRequirements ?? "—"} />
             <TextBlock
               label="Нормативное основание"
-              value={entry.legalBasis.length ? entry.legalBasis.map(legalBasisLabel).join("\n") : "—"}
+              value={
+                entry.legalBasis.length
+                  ? entry.legalBasis.map(legalBasisLabel).join("\n")
+                  : "—"
+              }
             />
             <TextBlock
               label="Подписанный payload"
               value={[
                 `documentVersionHash: ${entry.documentVersionHash ?? "не создан"}`,
                 `signedPayloadHash: ${entry.signedPayloadHash ?? "не создан"}`,
+              ].join("\n")}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {entry ? (
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-slate-950">
+              Appendix 1 details
+            </h2>
+          </CardHeader>
+          <CardContent className="grid gap-4 lg:grid-cols-2">
+            <TextBlock
+              label="Object / equipment"
+              value={entry.equipmentOrObject ?? "n/a"}
+            />
+            <TextBlock
+              label="Workplace preparation"
+              value={entry.workplacePreparationMeasures ?? "n/a"}
+            />
+            <TextBlock
+              label="Safety measure executors"
+              value={entry.safetyMeasureExecutors ?? "n/a"}
+            />
+            <TextBlock
+              label="Air analysis"
+              value={[
+                `required: ${entry.airAnalysisRequired ? "yes" : "no"}`,
+                `at: ${entry.airAnalysisAt ? formatDateTime(entry.airAnalysisAt) : "n/a"}`,
+                `by: ${entry.airAnalysisBy ?? "n/a"}`,
+                `result: ${entry.airAnalysisResult ?? "n/a"}`,
+              ].join("\n")}
+            />
+            <TextBlock
+              label="Isolation / lockout"
+              value={entry.isolationLockoutMeasures ?? "n/a"}
+            />
+            <TextBlock
+              label="Fencing and signs"
+              value={entry.fencingAndSignsMeasures ?? "n/a"}
+            />
+            <TextBlock
+              label="Fire safety"
+              value={entry.fireSafetyMeasures ?? "n/a"}
+            />
+            <TextBlock
+              label="Adjacent approvals / communication"
+              value={entry.communicationOrAdjacentAreaApprovals ?? "n/a"}
+            />
+            <TextBlock
+              label="Target briefing"
+              value={[
+                entry.targetBriefingText ?? "n/a",
+                `at: ${entry.targetBriefingAt ? formatDateTime(entry.targetBriefingAt) : "n/a"}`,
+                `instructor: ${entry.targetBriefingInstructorId ?? "n/a"}`,
+                `crew acknowledgements: ${entry.crewInstructionAcknowledgements.length}`,
+              ].join("\n")}
+            />
+            <TextBlock
+              label="Admission"
+              value={[
+                `admissionAt: ${entry.admissionAt ? formatDateTime(entry.admissionAt) : "n/a"}`,
+                `admittedById: ${entry.admittedById ?? "n/a"}`,
+                `acceptedByWorkProducerAt: ${entry.acceptedByWorkProducerAt ? formatDateTime(entry.acceptedByWorkProducerAt) : "n/a"}`,
+              ].join("\n")}
+            />
+            <TextBlock
+              label="Payload legal basis"
+              value={[
+                `version: ${entry.legalBasisVersion ?? "n/a"}`,
+                `effectiveDate: ${entry.legalBasisEffectiveDate ?? "n/a"}`,
               ].join("\n")}
             />
           </CardContent>
@@ -135,11 +371,26 @@ export function PermitSummary({ permit, companyId, readOnly = false }: PermitSum
           <div className="grid gap-3 md:grid-cols-4">
             {[
               ["Черновик", "draft"],
-              ["Precheck", entry?.precheckSummary?.result === "PASS" ? "active" : "missing_documents"],
-              ["Согласование", status === "approved" || status === "active" || status === "closed" ? "approved" : "pending_approval"],
+              [
+                "Precheck",
+                entry?.precheckSummary?.result === "PASS"
+                  ? "active"
+                  : "missing_documents",
+              ],
+              [
+                "Согласование",
+                status === "approved" ||
+                status === "active" ||
+                status === "closed"
+                  ? "approved"
+                  : "pending_approval",
+              ],
               ["Архив", status === "archived" ? "archived" : "draft"],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-lg border border-slate-200 p-4">
+              <div
+                key={label}
+                className="rounded-lg border border-slate-200 p-4"
+              >
                 <p className="text-sm text-slate-500">{label}</p>
                 <div className="mt-2">
                   <StatusBadge value={value} />
@@ -148,8 +399,8 @@ export function PermitSummary({ permit, companyId, readOnly = false }: PermitSum
             ))}
           </div>
           <p className="mt-4 text-sm text-slate-500">
-            Текущий статус: {getPermitStatusLabel(status)}. После согласования ключевые поля
-            допуска недоступны для прямого редактирования.
+            Текущий статус: {getPermitStatusLabel(status)}. После согласования
+            ключевые поля допуска недоступны для прямого редактирования.
           </p>
         </CardContent>
       </Card>
@@ -168,31 +419,146 @@ export function PermitPrecheckList({ entry }: { entry: PermitEntry | null }) {
     );
   }
 
+  const blockerCount = checks.filter(
+    (check) => check.result === "FAIL" && check.severity === "BLOCKER",
+  ).length;
+  const warningCount = checks.filter(
+    (check) => check.result === "FAIL" && check.severity === "WARNING",
+  ).length;
+  const groups = [
+    {
+      label: "Люди",
+      codes: [
+        "INTERNAL_EMPLOYEE_ACTIVE",
+        "CONTRACTOR_WORKER_ACTIVE",
+        "CONTRACTOR_WORKER_MATCHES_CONTRACTOR",
+      ],
+    },
+    {
+      label: "Акт допуска подрядчика",
+      codes: [
+        "CONTRACTOR_ACCESS_ACT_PRESENT",
+        "CONTRACTOR_ACCESS_ACT_ACTIVE",
+        "CONTRACTOR_ACCESS_ACT_DATE_COVERAGE",
+      ],
+    },
+    {
+      label: "Обучение и инструктаж",
+      codes: [
+        "TRAINING_EVIDENCE_VALID",
+        "BRIEFING_EVIDENCE_VALID",
+        "TARGET_BRIEFING_PRESENT",
+      ],
+    },
+    {
+      label: "Квалификация и удостоверения",
+      codes: ["QUALIFICATION_OR_CERTIFICATE_VALID"],
+    },
+    {
+      label: "Медицинский допуск",
+      codes: ["MEDICAL_CLEARANCE_VALID", "MEDICAL_SNAPSHOT_DIAGNOSIS_FREE"],
+    },
+    { label: "СИЗ", codes: ["PPE_ISSUED_VALID"] },
+    {
+      label: "Обязательные документы",
+      codes: ["REQUIRED_DOCUMENTS_PRESENT", "LEGAL_BASIS_PRESENT"],
+    },
+    {
+      label: "Подготовка места и меры безопасности",
+      codes: [
+        "WORKPLACE_PREPARATION_MEASURES_PRESENT",
+        "SAFETY_MEASURES_PRESENT",
+      ],
+    },
+  ];
+
   return (
-    <div className="grid gap-3">
-      {checks.map((check) => (
-        <div key={check.code} className="rounded-lg border border-slate-200 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="font-medium text-slate-950">{check.label}</p>
-              <p className="mt-1 text-sm text-slate-500">{check.message}</p>
-            </div>
-            <StatusBadge value={check.result === "PASS" ? "active" : "blocked"} />
-          </div>
-          {check.evidence.length ? (
-            <p className="mt-3 text-xs text-slate-500">Evidence: {check.evidence.join(", ")}</p>
-          ) : null}
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Fact
+          label="Общий результат"
+          value={blockerCount === 0 ? "PASS" : "FAIL"}
+        />
+        <Fact label="Блокеры" value={String(blockerCount)} />
+        <Fact label="Предупреждения" value={String(warningCount)} />
+      </div>
+      {groups.map((group) => {
+        const groupChecks = checks.filter((check) =>
+          group.codes.includes(check.code),
+        );
+        if (!groupChecks.length) return null;
+        return (
+          <section key={group.label} className="space-y-3">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              {group.label}
+            </h3>
+            {groupChecks.map((check) => (
+              <div
+                key={`${check.code}:${check.subjectId ?? "all"}`}
+                className="rounded-lg border border-slate-200 p-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-slate-950">{check.label}</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {check.message}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span
+                      className={
+                        check.severity === "BLOCKER"
+                          ? "font-medium text-rose-700"
+                          : "font-medium text-amber-700"
+                      }
+                    >
+                      {check.severity}
+                    </span>
+                    <StatusBadge
+                      value={check.result === "PASS" ? "active" : "blocked"}
+                    />
+                  </div>
+                </div>
+                {check.evidenceIds.length ? (
+                  <p className="mt-3 text-xs text-slate-500">
+                    Evidence: {check.evidenceIds.join(", ")}
+                  </p>
+                ) : null}
+                {check.expiresAt ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Действует до: {formatDateTime(check.expiresAt)}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </section>
+        );
+      })}
+      {checks.some(
+        (check) => !groups.some((group) => group.codes.includes(check.code)),
+      ) ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Часть checks имеет неизвестную UI-группу и требует обновления
+          отображения.
         </div>
-      ))}
+      ) : null}
     </div>
   );
 }
 
-function Fact({ label, value }: { label: string; value: string | null | undefined }) {
+function Fact({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null | undefined;
+}) {
   return (
     <div className="rounded-lg border border-slate-200 p-4">
       <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-medium text-slate-950">{display(value)}</p>
+      <p className="mt-2 text-sm font-medium text-slate-950">
+        {display(value)}
+      </p>
     </div>
   );
 }
@@ -201,7 +567,9 @@ function TextBlock({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-slate-200 p-4">
       <p className="text-sm font-medium text-slate-900">{label}</p>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{display(value)}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+        {display(value)}
+      </p>
     </div>
   );
 }

@@ -24,7 +24,8 @@
     "db:deploy": "corepack pnpm --filter @dsj/database db:deploy",
     "db:generate": "corepack pnpm --filter @dsj/database db:generate",
     "db:migrate": "corepack pnpm --filter @dsj/database db:migrate",
-    "db:seed": "corepack pnpm --filter @dsj/database db:seed"
+    "db:seed": "corepack pnpm --filter @dsj/database db:seed",
+    "db:seed:permit-demo": "corepack pnpm --filter @dsj/database db:seed:permit-demo"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

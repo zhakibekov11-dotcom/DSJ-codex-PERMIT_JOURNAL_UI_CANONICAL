@@ -1,20 +1,24 @@
 import {
   permitEntrySchema,
   type PermitEntry,
+  type PermitJournalRow,
   type PermitPrecheckCheck,
   type PermitSnapshot,
   type PermitStatus,
   type PermitType,
   type PermitWorkType,
+  type ContractorAccessActSummary,
 } from "@dsj/types";
 
 export type {
   PermitEntry,
+  PermitJournalRow,
   PermitPrecheckCheck,
   PermitSnapshot,
   PermitStatus,
   PermitType,
   PermitWorkType,
+  ContractorAccessActSummary,
 } from "@dsj/types";
 
 export type PermitVersion = {
@@ -61,15 +65,26 @@ export type PermitRecord = {
   workSiteId: string | null;
   contractorOrganizationId: string | null;
   contractorRepresentativeId: string | null;
+  contractorAccessActId: string | null;
+  issuerEmployeeId: string | null;
+  responsibleManagerEmployeeId: string | null;
+  workProducerEmployeeId: string | null;
+  admitterEmployeeId: string | null;
+  observerEmployeeId: string | null;
   status: string;
+  issuedAt: string | null;
+  startedAt: string | null;
   effectiveFrom: string | null;
   effectiveTo: string | null;
   closedAt: string | null;
+  archivedAt: string | null;
   signedPayloadHash: string | null;
   archiveRecordId: string | null;
+  retentionPolicyId: string | null;
   currentVersionId: string | null;
   createdAt: string;
   updatedAt: string;
+  journal?: PermitJournalRow | null;
   currentVersion?: PermitVersion | null;
   versions?: PermitVersion[];
   brigades?: PermitBrigade[];
@@ -105,9 +120,29 @@ export type PermitRecord = {
       archivedAt: string | null;
       disposalEligibleAt: string | null;
     }>;
+    exportSnapshots: Array<{
+      id: string;
+      format: string;
+      sha256: string;
+      generatedAt: string;
+    }>;
   } | null;
   branch?: { id: string; name: string; code?: string | null } | null;
   workSite?: { id: string; name: string; location?: string | null } | null;
+  contractorAccessAct?:
+    | (ContractorAccessActSummary & {
+        contractorOrganization?: {
+          id: string;
+          name: string;
+          bin?: string | null;
+        };
+        contractorRepresentative?: {
+          id: string;
+          fullName: string;
+          workerNumber?: string | null;
+        } | null;
+      })
+    | null;
 };
 
 export type PermitPage = {
@@ -129,6 +164,7 @@ export type PermitFormOptions = {
   departments: PermitOption[];
   workSites: PermitOption[];
   contractors: PermitOption[];
+  contractorAccessActs: PermitOption[];
   trainingEvidence: PermitOption[];
   briefingEvidence: PermitOption[];
   certificateEvidence: PermitOption[];
@@ -257,6 +293,31 @@ function asStringArray(value: unknown): string[] {
     : [];
 }
 
+function asOptionalString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function asContractorAccessActSummary(
+  value: unknown,
+): ContractorAccessActSummary | null {
+  const act = asObject(value);
+  if (!act.id || !act.actNumber) return null;
+  return {
+    id: String(act.id),
+    actNumber: String(act.actNumber),
+    status: String(
+      act.status ?? "DRAFT",
+    ) as ContractorAccessActSummary["status"],
+    validFrom: String(act.validFrom ?? new Date(0).toISOString()),
+    validTo: String(act.validTo ?? new Date(0).toISOString()),
+    workArea: String(act.workArea ?? ""),
+    contractorOrganizationId: String(act.contractorOrganizationId ?? ""),
+    contractorRepresentativeId: asOptionalString(
+      act.contractorRepresentativeId,
+    ),
+  };
+}
+
 export function getPermitEntry(record: {
   currentVersion?: { payloadJson?: unknown } | null;
 }): PermitEntry | null {
@@ -280,6 +341,7 @@ export function getPermitEntry(record: {
     status: (rawEntry.status as PermitStatus) ?? "draft",
     workDescription: String(rawEntry.workDescription ?? ""),
     workplace: String(rawEntry.workplace ?? ""),
+    equipmentOrObject: asOptionalString(rawEntry.equipmentOrObject),
     companyId:
       typeof rawEntry.companyId === "string" ? rawEntry.companyId : null,
     journalId:
@@ -298,6 +360,13 @@ export function getPermitEntry(record: {
       typeof rawEntry.contractorRepresentativeId === "string"
         ? rawEntry.contractorRepresentativeId
         : null,
+    contractorAccessActId:
+      typeof rawEntry.contractorAccessActId === "string"
+        ? rawEntry.contractorAccessActId
+        : null,
+    contractorAccessAct: asContractorAccessActSummary(
+      rawEntry.contractorAccessAct,
+    ),
     issuerId: typeof rawEntry.issuerId === "string" ? rawEntry.issuerId : null,
     responsibleManagerId:
       typeof rawEntry.responsibleManagerId === "string"
@@ -321,10 +390,38 @@ export function getPermitEntry(record: {
     crewMemberIds: asStringArray(rawEntry.crewMemberIds),
     hazardFactors: asStringArray(rawEntry.hazardFactors),
     safetyMeasures: String(rawEntry.safetyMeasures ?? ""),
-    ppeRequirements:
-      typeof rawEntry.ppeRequirements === "string"
-        ? rawEntry.ppeRequirements
-        : null,
+    workplacePreparationMeasures: asOptionalString(
+      rawEntry.workplacePreparationMeasures,
+    ),
+    safetyMeasureExecutors: asOptionalString(rawEntry.safetyMeasureExecutors),
+    airAnalysisRequired: rawEntry.airAnalysisRequired === true,
+    airAnalysisResult: asOptionalString(rawEntry.airAnalysisResult),
+    airAnalysisAt: asOptionalString(rawEntry.airAnalysisAt),
+    airAnalysisBy: asOptionalString(rawEntry.airAnalysisBy),
+    isolationLockoutMeasures: asOptionalString(
+      rawEntry.isolationLockoutMeasures,
+    ),
+    fencingAndSignsMeasures: asOptionalString(rawEntry.fencingAndSignsMeasures),
+    fireSafetyMeasures: asOptionalString(rawEntry.fireSafetyMeasures),
+    communicationOrAdjacentAreaApprovals: asOptionalString(
+      rawEntry.communicationOrAdjacentAreaApprovals,
+    ),
+    targetBriefingText: asOptionalString(rawEntry.targetBriefingText),
+    targetBriefingAt: asOptionalString(rawEntry.targetBriefingAt),
+    targetBriefingInstructorId: asOptionalString(
+      rawEntry.targetBriefingInstructorId,
+    ),
+    crewInstructionAcknowledgements: Array.isArray(
+      rawEntry.crewInstructionAcknowledgements,
+    )
+      ? (rawEntry.crewInstructionAcknowledgements as PermitEntry["crewInstructionAcknowledgements"])
+      : [],
+    admissionAt: asOptionalString(rawEntry.admissionAt),
+    admittedById: asOptionalString(rawEntry.admittedById),
+    acceptedByWorkProducerAt: asOptionalString(
+      rawEntry.acceptedByWorkProducerAt,
+    ),
+    ppeRequirements: asOptionalString(rawEntry.ppeRequirements),
     ppeIssueRecordIds: asStringArray(rawEntry.ppeIssueRecordIds),
     legalBasis: asStringArray(rawEntry.legalBasis),
     legalBasisVersion:
@@ -344,7 +441,40 @@ export function getPermitEntry(record: {
       ? (asObject(rawEntry.precheckSummary) as PermitEntry["precheckSummary"])
       : null,
     precheckChecks: Array.isArray(rawEntry.precheckChecks)
-      ? (rawEntry.precheckChecks as PermitPrecheckCheck[])
+      ? rawEntry.precheckChecks.map((rawCheck) => {
+          const check = asObject(rawCheck);
+          return {
+            code: String(check.code ?? "UNKNOWN"),
+            label: String(check.label ?? check.code ?? "Unknown check"),
+            result: check.result === "PASS" ? "PASS" : "FAIL",
+            severity: check.severity === "WARNING" ? "WARNING" : "BLOCKER",
+            message: String(check.message ?? ""),
+            subjectType:
+              typeof check.subjectType === "string"
+                ? (check.subjectType as PermitPrecheckCheck["subjectType"])
+                : null,
+            subjectId:
+              typeof check.subjectId === "string" ? check.subjectId : null,
+            evidenceIds: Array.isArray(check.evidenceIds)
+              ? asStringArray(check.evidenceIds)
+              : asStringArray(check.evidence),
+            checkedAt:
+              typeof check.checkedAt === "string"
+                ? check.checkedAt
+                : typeof asObject(rawEntry.precheckSummary).checkedAt ===
+                    "string"
+                  ? String(asObject(rawEntry.precheckSummary).checkedAt)
+                  : new Date(0).toISOString(),
+            expiresAt:
+              typeof check.expiresAt === "string" ? check.expiresAt : null,
+            sourceType:
+              typeof check.sourceType === "string" ? check.sourceType : null,
+            sourceStatus:
+              typeof check.sourceStatus === "string"
+                ? check.sourceStatus
+                : null,
+          } satisfies PermitPrecheckCheck;
+        })
       : [],
     trainingCheckSnapshot: rawEntry.trainingCheckSnapshot as
       | PermitSnapshot
@@ -360,6 +490,9 @@ export function getPermitEntry(record: {
       | undefined,
     ppeIssuedSnapshot: rawEntry.ppeIssuedSnapshot as PermitSnapshot | undefined,
     requiredDocumentSnapshot: rawEntry.requiredDocumentSnapshot as
+      | PermitSnapshot
+      | undefined,
+    contractorAccessActSnapshot: rawEntry.contractorAccessActSnapshot as
       | PermitSnapshot
       | undefined,
     approvalStatus:
@@ -429,6 +562,50 @@ export function getEffectivePermitStatus(record: PermitRecord) {
     getPermitEntry(record)?.status ??
     "draft"
   );
+}
+
+export function getPermitJournalRow(record: PermitRecord): PermitJournalRow {
+  if (record.journal) return record.journal;
+
+  const entry = getPermitEntry(record);
+  const status = getEffectivePermitStatus(record);
+  const initialAdmissionAt = record.startedAt ?? entry?.admissionAt ?? null;
+  const endAt = record.effectiveTo ?? entry?.endAt ?? null;
+
+  return {
+    journalRegistrationNumber:
+      record.journalRegistrationNumber ??
+      entry?.journalRegistrationNumber ??
+      "",
+    permitNumber: record.permitCode ?? entry?.permitNumber ?? "",
+    initialAdmissionAt,
+    repeatedAdmissionAt: null,
+    issuer: record.issuerEmployeeId
+      ? {
+          id: record.issuerEmployeeId,
+          displayName: record.issuerEmployeeId,
+          sublabel: null,
+        }
+      : null,
+    workDescription: record.workDescription ?? entry?.workDescription ?? "",
+    workplace: record.workplace ?? entry?.workplace ?? "",
+    workType: record.workType ?? entry?.workType ?? "GENERAL_HIGH_RISK",
+    status,
+    startAt: record.effectiveFrom ?? entry?.startAt ?? null,
+    endAt,
+    validUntil: endAt ?? entry?.validUntil ?? null,
+    contractor: record.contractorOrganizationId
+      ? {
+          id: record.contractorOrganizationId,
+          displayName: record.contractorOrganizationId,
+          sublabel: null,
+        }
+      : null,
+    closedAt: record.closedAt,
+    archivedAt: record.archivedAt ?? entry?.archivedAt ?? null,
+    retentionUntil: entry?.retentionUntil ?? null,
+    archiveStatus: record.archivedAt ? "ARCHIVED" : null,
+  };
 }
 
 export function isPermitLocked(record: PermitRecord) {

@@ -33,6 +33,11 @@ function isoDate(formData: FormData, name: string) {
   return value ? new Date(value).toISOString() : "";
 }
 
+function optionalIsoDate(formData: FormData, name: string) {
+  const value = text(formData, name);
+  return value ? new Date(value).toISOString() : null;
+}
+
 function permitInput(formData: FormData) {
   const branchId = optionalText(formData, "branchId");
   const departmentId = optionalText(formData, "departmentId");
@@ -45,6 +50,7 @@ function permitInput(formData: FormData) {
     workType: text(formData, "workType") as PermitWorkType,
     workDescription: text(formData, "workDescription"),
     workplace: text(formData, "workplace"),
+    equipmentOrObject: optionalText(formData, "equipmentOrObject"),
     scopeType: deriveScopeType({ branchId, departmentId, workSiteId }),
     branchId,
     departmentId,
@@ -56,6 +62,7 @@ function permitInput(formData: FormData) {
       formData,
       "contractorRepresentativeId",
     ),
+    contractorAccessActId: optionalText(formData, "contractorAccessActId"),
     issuerId: optionalText(formData, "issuerId"),
     responsibleManagerId: optionalText(formData, "responsibleManagerId"),
     workProducerId: optionalText(formData, "workProducerId"),
@@ -67,6 +74,39 @@ function permitInput(formData: FormData) {
     },
     hazardFactors: lines(formData, "hazardFactors"),
     safetyMeasures: text(formData, "safetyMeasures"),
+    workplacePreparationMeasures: optionalText(
+      formData,
+      "workplacePreparationMeasures",
+    ),
+    safetyMeasureExecutors: optionalText(formData, "safetyMeasureExecutors"),
+    airAnalysisRequired: formData.get("airAnalysisRequired") === "on",
+    airAnalysisResult: optionalText(formData, "airAnalysisResult"),
+    airAnalysisAt: optionalIsoDate(formData, "airAnalysisAt"),
+    airAnalysisBy: optionalText(formData, "airAnalysisBy"),
+    isolationLockoutMeasures: optionalText(
+      formData,
+      "isolationLockoutMeasures",
+    ),
+    fencingAndSignsMeasures: optionalText(formData, "fencingAndSignsMeasures"),
+    fireSafetyMeasures: optionalText(formData, "fireSafetyMeasures"),
+    communicationOrAdjacentAreaApprovals: optionalText(
+      formData,
+      "communicationOrAdjacentAreaApprovals",
+    ),
+    targetBriefingText: optionalText(formData, "targetBriefingText"),
+    targetBriefingAt: optionalIsoDate(formData, "targetBriefingAt"),
+    targetBriefingInstructorId: optionalText(
+      formData,
+      "targetBriefingInstructorId",
+    ),
+    crewAcknowledgementsComplete:
+      formData.get("crewAcknowledgementsComplete") === "on",
+    admissionAt: optionalIsoDate(formData, "admissionAt"),
+    admittedById: optionalText(formData, "admittedById"),
+    acceptedByWorkProducerAt: optionalIsoDate(
+      formData,
+      "acceptedByWorkProducerAt",
+    ),
     ppeRequirements: optionalText(formData, "ppeRequirements"),
     ppeIssueRecordIds: values(formData, "ppeIssueRecordIds"),
     legalBasis: values(formData, "legalBasis"),
@@ -75,6 +115,39 @@ function permitInput(formData: FormData) {
     certificateEvidenceIds: values(formData, "certificateEvidenceIds"),
     medicalEvidenceIds: values(formData, "medicalEvidenceIds"),
     requiredDocumentIds: values(formData, "requiredDocumentIds"),
+  };
+}
+
+function contractorAccessActInput(formData: FormData) {
+  const branchId = optionalText(formData, "branchId");
+  const departmentId = optionalText(formData, "departmentId");
+  const workSiteId = optionalText(formData, "workSiteId");
+
+  return {
+    actNumber: text(formData, "actNumber"),
+    scopeType: deriveScopeType({ branchId, departmentId, workSiteId }),
+    branchId,
+    departmentId,
+    workSiteId,
+    contractorOrganizationId: text(formData, "contractorOrganizationId"),
+    contractorRepresentativeId: optionalText(
+      formData,
+      "contractorRepresentativeId",
+    ),
+    hostRepresentativeEmployeeId: optionalText(
+      formData,
+      "hostRepresentativeEmployeeId",
+    ),
+    hostUnitChiefEmployeeId: optionalText(formData, "hostUnitChiefEmployeeId"),
+    workName: text(formData, "workName"),
+    workDescription: optionalText(formData, "workDescription"),
+    workArea: text(formData, "workArea"),
+    workAreaBoundaries: optionalText(formData, "workAreaBoundaries"),
+    workAreaCoordinates: optionalText(formData, "workAreaCoordinates"),
+    validFrom: isoDate(formData, "validFrom"),
+    validTo: isoDate(formData, "validTo"),
+    safetyMeasures: lines(formData, "safetyMeasures"),
+    specialConditions: optionalText(formData, "specialConditions"),
   };
 }
 
@@ -101,6 +174,21 @@ function permitsUrl(
   if (options?.error) params.set("error", options.error);
   if (options?.success) params.set("success", options.success);
   return params.size ? `/permits?${params.toString()}` : "/permits";
+}
+
+function contractorAccessActsUrl(
+  companyId: string | null,
+  options?: { actId?: string; error?: string; success?: string },
+) {
+  const params = new URLSearchParams();
+  if (companyId) params.set("companyId", companyId);
+  if (options?.actId) params.set("actId", options.actId);
+  if (options?.error) params.set("error", options.error);
+  if (options?.success) params.set("success", options.success);
+  const query = params.toString();
+  return query
+    ? `/permits/contractor-access-acts?${query}`
+    : "/permits/contractor-access-acts";
 }
 
 function refresh(permitId: string) {
@@ -200,6 +288,136 @@ export async function updatePermitAction(formData: FormData) {
   }
   refresh(permitId);
   redirect(permitUrl(permitId, companyId, { success: "Допуск обновлён." }));
+}
+
+export async function createContractorAccessActAction(formData: FormData) {
+  const companyId = optionalText(formData, "companyId");
+  let actId: string;
+  try {
+    const act = await apiFetch<{ id: string }>(
+      "core-platform/contractor-access-acts",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          organizationId: companyId,
+          ...contractorAccessActInput(formData),
+        }),
+      },
+    );
+    actId = act.id;
+  } catch (error) {
+    redirect(
+      contractorAccessActsUrl(companyId, {
+        error:
+          error instanceof Error
+            ? error.message
+            : "РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ Р°РєС‚-РґРѕРїСѓСЃРє.",
+      }),
+    );
+  }
+  revalidatePath("/permits/contractor-access-acts");
+  redirect(
+    contractorAccessActsUrl(companyId, {
+      actId,
+      success: "РђРєС‚-РґРѕРїСѓСЃРє СЃРѕР·РґР°РЅ РІ СЃС‚Р°С‚СѓСЃРµ draft.",
+    }),
+  );
+}
+
+export async function updateContractorAccessActAction(formData: FormData) {
+  const companyId = optionalText(formData, "companyId");
+  const actId = text(formData, "actId");
+  try {
+    await apiFetch(`core-platform/contractor-access-acts/${actId}`, {
+      method: "PATCH",
+      body: JSON.stringify(contractorAccessActInput(formData)),
+    });
+  } catch (error) {
+    redirect(
+      contractorAccessActsUrl(companyId, {
+        actId,
+        error:
+          error instanceof Error
+            ? error.message
+            : "РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ Р°РєС‚-РґРѕРїСѓСЃРє.",
+      }),
+    );
+  }
+  revalidatePath("/permits/contractor-access-acts");
+  redirect(
+    contractorAccessActsUrl(companyId, {
+      actId,
+      success: "РђРєС‚-РґРѕРїСѓСЃРє РѕР±РЅРѕРІР»С‘РЅ.",
+    }),
+  );
+}
+
+async function contractorAccessActWorkflowAction(
+  formData: FormData,
+  endpoint: string,
+  body: unknown,
+  success: string,
+) {
+  const companyId = optionalText(formData, "companyId");
+  const actId = text(formData, "actId");
+  try {
+    await apiFetch(
+      `core-platform/contractor-access-acts/${actId}/${endpoint}`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
+  } catch (error) {
+    redirect(
+      contractorAccessActsUrl(companyId, {
+        actId,
+        error:
+          error instanceof Error
+            ? error.message
+            : "РћРїРµСЂР°С†РёСЏ РїРѕ Р°РєС‚Сѓ-РґРѕРїСѓСЃРєСѓ РЅРµ РІС‹РїРѕР»РЅРµРЅР°.",
+      }),
+    );
+  }
+  revalidatePath("/permits/contractor-access-acts");
+  revalidatePath("/permits/new");
+  redirect(contractorAccessActsUrl(companyId, { actId, success }));
+}
+
+export async function activateContractorAccessActAction(formData: FormData) {
+  return contractorAccessActWorkflowAction(
+    formData,
+    "activate",
+    { comment: optionalText(formData, "comment") },
+    "РђРєС‚-РґРѕРїСѓСЃРє Р°РєС‚РёРІРёСЂРѕРІР°РЅ.",
+  );
+}
+
+export async function closeContractorAccessActAction(formData: FormData) {
+  return contractorAccessActWorkflowAction(
+    formData,
+    "close",
+    { comment: optionalText(formData, "comment") },
+    "РђРєС‚-РґРѕРїСѓСЃРє Р·Р°РєСЂС‹С‚.",
+  );
+}
+
+export async function cancelContractorAccessActAction(formData: FormData) {
+  return contractorAccessActWorkflowAction(
+    formData,
+    "cancel",
+    { reason: text(formData, "reason") },
+    "РђРєС‚-РґРѕРїСѓСЃРє РѕС‚РјРµРЅС‘РЅ.",
+  );
+}
+
+export async function archiveContractorAccessActAction(formData: FormData) {
+  return contractorAccessActWorkflowAction(
+    formData,
+    "archive",
+    {},
+    "РђРєС‚-РґРѕРїСѓСЃРє Р°СЂС…РёРІРёСЂРѕРІР°РЅ.",
+  );
 }
 
 export async function runPermitPrecheckAction(formData: FormData) {

@@ -81,6 +81,7 @@ export default async function EditPermitPage({
               }`,
             )}
             contractors={options.contractors}
+            contractorAccessActs={options.contractorAccessActs}
             trainingEvidence={options.trainingEvidence}
             briefingEvidence={options.briefingEvidence}
             certificateEvidence={options.certificateEvidence}

@@ -4,6 +4,7 @@ import {
   Card,
   CardContent,
   CardHeader,
+  EmptyState,
   Input,
   PageHeader,
   Select,
@@ -114,7 +115,9 @@ export default async function ContractorAccessActsPage({
     searchParams: params,
   });
   const companyId = activeCompanyId ?? session.user.companyId ?? null;
-  const query = companyId ? `?organizationId=${companyId}&pageSize=100` : "?pageSize=100";
+  const query = companyId
+    ? `?organizationId=${companyId}&pageSize=100`
+    : "?pageSize=100";
   const [page, options] = await Promise.all([
     apiFetch<{
       items: ContractorAccessActRecord[];
@@ -171,54 +174,65 @@ export default async function ContractorAccessActsPage({
             </h2>
           </CardHeader>
           <CardContent className="p-0">
-            <TableWrapper className="border-0">
-              <Table>
-                <thead>
-                  <tr>
-                    <Th>Акт</Th>
-                    <Th>Подрядчик</Th>
-                    <Th>Зона</Th>
-                    <Th>Срок</Th>
-                    <Th>Статус</Th>
-                    <Th>Наряды</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {page.items.map((act) => {
-                    const link = companyId
-                      ? `/permits/contractor-access-acts?companyId=${companyId}&actId=${act.id}`
-                      : `/permits/contractor-access-acts?actId=${act.id}`;
-                    return (
-                      <tr key={act.id} className="border-t border-slate-100">
-                        <Td>
-                          <Link href={link} className="font-medium text-slate-900">
-                            {act.actNumber}
-                          </Link>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {act.workName}
-                          </p>
-                        </Td>
-                        <Td>
-                          {act.contractorOrganization?.name ??
-                            act.contractorOrganizationId}
-                        </Td>
-                        <Td>{act.workArea}</Td>
-                        <Td>
-                          <p>{formatDateTime(act.validFrom)}</p>
-                          <p className="text-xs text-slate-500">
-                            {formatDateTime(act.validTo)}
-                          </p>
-                        </Td>
-                        <Td>
-                          <StatusBadge value={act.status.toLowerCase()} />
-                        </Td>
-                        <Td>{act.workPermits?.length ?? 0}</Td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </Table>
-            </TableWrapper>
+            {page.items.length ? (
+              <TableWrapper className="border-0">
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>Акт</Th>
+                      <Th>Подрядчик</Th>
+                      <Th>Зона</Th>
+                      <Th>Срок</Th>
+                      <Th>Статус</Th>
+                      <Th>Наряды</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {page.items.map((act) => {
+                      const link = companyId
+                        ? `/permits/contractor-access-acts?companyId=${companyId}&actId=${act.id}`
+                        : `/permits/contractor-access-acts?actId=${act.id}`;
+                      return (
+                        <tr key={act.id} className="border-t border-slate-100">
+                          <Td>
+                            <Link
+                              href={link}
+                              className="font-medium text-slate-900"
+                            >
+                              {act.actNumber}
+                            </Link>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {act.workName}
+                            </p>
+                          </Td>
+                          <Td>
+                            {act.contractorOrganization?.name ??
+                              act.contractorOrganizationId}
+                          </Td>
+                          <Td>{act.workArea}</Td>
+                          <Td>
+                            <p>{formatDateTime(act.validFrom)}</p>
+                            <p className="text-xs text-slate-500">
+                              {formatDateTime(act.validTo)}
+                            </p>
+                          </Td>
+                          <Td>
+                            <StatusBadge value={act.status.toLowerCase()} />
+                          </Td>
+                          <Td>{act.workPermits?.length ?? 0}</Td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              </TableWrapper>
+            ) : (
+              <EmptyState className="min-h-40 justify-center text-left">
+                No contractor access acts yet. Use the form to create an
+                Appendix 3 draft, then activate it before linking a contractor
+                site-access permit.
+              </EmptyState>
+            )}
           </CardContent>
         </Card>
 
@@ -249,7 +263,9 @@ export default async function ContractorAccessActsPage({
                     name="actNumber"
                     defaultValue={selectedAct?.actNumber ?? ""}
                     required
-                    disabled={Boolean(selectedAct && selectedAct.status !== "DRAFT")}
+                    disabled={Boolean(
+                      selectedAct && selectedAct.status !== "DRAFT",
+                    )}
                   />
                 </Field>
                 <Field label="Подрядчик">
@@ -257,7 +273,9 @@ export default async function ContractorAccessActsPage({
                     name="contractorOrganizationId"
                     defaultValue={selectedAct?.contractorOrganizationId ?? ""}
                     required
-                    disabled={Boolean(selectedAct && selectedAct.status !== "DRAFT")}
+                    disabled={Boolean(
+                      selectedAct && selectedAct.status !== "DRAFT",
+                    )}
                   >
                     <option value="">Не выбран</option>
                     {optionList(options.contractors)}
@@ -267,7 +285,9 @@ export default async function ContractorAccessActsPage({
                   <Select
                     name="contractorRepresentativeId"
                     defaultValue={selectedAct?.contractorRepresentativeId ?? ""}
-                    disabled={Boolean(selectedAct && selectedAct.status !== "DRAFT")}
+                    disabled={Boolean(
+                      selectedAct && selectedAct.status !== "DRAFT",
+                    )}
                   >
                     <option value="">Не выбран</option>
                     {optionList(options.contractorWorkers)}
@@ -277,7 +297,9 @@ export default async function ContractorAccessActsPage({
                   <Select
                     name="workSiteId"
                     defaultValue={selectedAct?.workSiteId ?? ""}
-                    disabled={Boolean(selectedAct && selectedAct.status !== "DRAFT")}
+                    disabled={Boolean(
+                      selectedAct && selectedAct.status !== "DRAFT",
+                    )}
                   >
                     <option value="">Не выбран</option>
                     {optionList(options.workSites)}
@@ -286,8 +308,12 @@ export default async function ContractorAccessActsPage({
                 <Field label="Принимающая сторона">
                   <Select
                     name="hostRepresentativeEmployeeId"
-                    defaultValue={selectedAct?.hostRepresentativeEmployeeId ?? ""}
-                    disabled={Boolean(selectedAct && selectedAct.status !== "DRAFT")}
+                    defaultValue={
+                      selectedAct?.hostRepresentativeEmployeeId ?? ""
+                    }
+                    disabled={Boolean(
+                      selectedAct && selectedAct.status !== "DRAFT",
+                    )}
                   >
                     <option value="">Не выбран</option>
                     {optionList(options.employees)}
@@ -297,7 +323,9 @@ export default async function ContractorAccessActsPage({
                   <Select
                     name="hostUnitChiefEmployeeId"
                     defaultValue={selectedAct?.hostUnitChiefEmployeeId ?? ""}
-                    disabled={Boolean(selectedAct && selectedAct.status !== "DRAFT")}
+                    disabled={Boolean(
+                      selectedAct && selectedAct.status !== "DRAFT",
+                    )}
                   >
                     <option value="">Не выбран</option>
                     {optionList(options.employees)}
@@ -309,7 +337,9 @@ export default async function ContractorAccessActsPage({
                     type="datetime-local"
                     defaultValue={dateValue(selectedAct?.validFrom)}
                     required
-                    disabled={Boolean(selectedAct && selectedAct.status !== "DRAFT")}
+                    disabled={Boolean(
+                      selectedAct && selectedAct.status !== "DRAFT",
+                    )}
                   />
                 </Field>
                 <Field label="Действует до">
@@ -318,7 +348,9 @@ export default async function ContractorAccessActsPage({
                     type="datetime-local"
                     defaultValue={dateValue(selectedAct?.validTo)}
                     required
-                    disabled={Boolean(selectedAct && selectedAct.status !== "DRAFT")}
+                    disabled={Boolean(
+                      selectedAct && selectedAct.status !== "DRAFT",
+                    )}
                   />
                 </Field>
               </div>
@@ -327,7 +359,9 @@ export default async function ContractorAccessActsPage({
                   name="workName"
                   defaultValue={selectedAct?.workName ?? ""}
                   required
-                  disabled={Boolean(selectedAct && selectedAct.status !== "DRAFT")}
+                  disabled={Boolean(
+                    selectedAct && selectedAct.status !== "DRAFT",
+                  )}
                 />
               </Field>
               <Field label="Зона работ">
@@ -335,21 +369,27 @@ export default async function ContractorAccessActsPage({
                   name="workArea"
                   defaultValue={selectedAct?.workArea ?? ""}
                   required
-                  disabled={Boolean(selectedAct && selectedAct.status !== "DRAFT")}
+                  disabled={Boolean(
+                    selectedAct && selectedAct.status !== "DRAFT",
+                  )}
                 />
               </Field>
               <Field label="Границы зоны">
                 <Textarea
                   name="workAreaBoundaries"
                   defaultValue={selectedAct?.workAreaBoundaries ?? ""}
-                  disabled={Boolean(selectedAct && selectedAct.status !== "DRAFT")}
+                  disabled={Boolean(
+                    selectedAct && selectedAct.status !== "DRAFT",
+                  )}
                 />
               </Field>
               <Field label="Описание работ">
                 <Textarea
                   name="workDescription"
                   defaultValue={selectedAct?.workDescription ?? ""}
-                  disabled={Boolean(selectedAct && selectedAct.status !== "DRAFT")}
+                  disabled={Boolean(
+                    selectedAct && selectedAct.status !== "DRAFT",
+                  )}
                 />
               </Field>
               <Field label="Мероприятия по безопасности">
@@ -357,14 +397,18 @@ export default async function ContractorAccessActsPage({
                   name="safetyMeasures"
                   defaultValue={safetyText(selectedAct?.safetyMeasures ?? [])}
                   required
-                  disabled={Boolean(selectedAct && selectedAct.status !== "DRAFT")}
+                  disabled={Boolean(
+                    selectedAct && selectedAct.status !== "DRAFT",
+                  )}
                 />
               </Field>
               <Field label="Особые условия">
                 <Textarea
                   name="specialConditions"
                   defaultValue={selectedAct?.specialConditions ?? ""}
-                  disabled={Boolean(selectedAct && selectedAct.status !== "DRAFT")}
+                  disabled={Boolean(
+                    selectedAct && selectedAct.status !== "DRAFT",
+                  )}
                 />
               </Field>
               {!selectedAct || selectedAct.status === "DRAFT" ? (
@@ -394,15 +438,26 @@ export default async function ContractorAccessActsPage({
                   />
                 ) : null}
                 {["DRAFT", "ACTIVE"].includes(selectedAct.status) ? (
-                  <form action={cancelContractorAccessActAction} className="flex gap-2">
+                  <form
+                    action={cancelContractorAccessActAction}
+                    className="flex gap-2"
+                  >
                     <input type="hidden" name="actId" value={selectedAct.id} />
-                    <input type="hidden" name="companyId" value={companyId ?? ""} />
+                    <input
+                      type="hidden"
+                      name="companyId"
+                      value={companyId ?? ""}
+                    />
                     <input
                       type="hidden"
                       name="reason"
                       value="Акт-допуск отменён из карточки."
                     />
-                    <SubmitButton label="Отменить" pendingLabel="Отмена..." variant="danger" />
+                    <SubmitButton
+                      label="Отменить"
+                      pendingLabel="Отмена..."
+                      variant="danger"
+                    />
                   </form>
                 ) : null}
                 {["CLOSED", "CANCELLED"].includes(selectedAct.status) ? (
@@ -422,13 +477,7 @@ export default async function ContractorAccessActsPage({
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="space-y-1.5">
       <label className="text-sm font-medium text-slate-700">{label}</label>

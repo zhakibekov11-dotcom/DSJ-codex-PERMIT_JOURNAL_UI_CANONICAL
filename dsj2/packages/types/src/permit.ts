@@ -78,6 +78,15 @@ export const permitSnapshotEvidenceSchema = z.object({
   documentNumber: z.string().nullable().optional(),
 });
 
+export const permitPrecheckSubjectTypeSchema = z.enum([
+  "EMPLOYEE",
+  "CONTRACTOR_WORKER",
+  "CONTRACTOR_ACCESS_ACT",
+  "WORKPLACE",
+  "DOCUMENT",
+  "PPE",
+]);
+
 export const permitSnapshotSchema = z.object({
   checkedAt: isoDateTime,
   result: z.enum(["PASS", "FAIL"]),
@@ -90,7 +99,13 @@ export const permitPrecheckCheckSchema = z.object({
   result: z.enum(["PASS", "FAIL"]),
   severity: z.enum(["BLOCKER", "WARNING"]),
   message: z.string(),
-  evidence: z.array(z.string()),
+  subjectType: permitPrecheckSubjectTypeSchema.nullable(),
+  subjectId: z.string().nullable(),
+  evidenceIds: z.array(z.string()),
+  checkedAt: isoDateTime,
+  expiresAt: isoDateTime.nullable(),
+  sourceType: z.string().nullable(),
+  sourceStatus: z.string().nullable(),
 });
 
 export const permitClosureSchema = z.object({
@@ -190,6 +205,9 @@ export const permitEntrySchema = z.object({
       result: z.enum(["PASS", "FAIL"]),
       checkedAt: isoDateTime,
       failedRules: z.array(z.string()),
+      blockerCount: z.number().int().min(0).optional(),
+      warningCount: z.number().int().min(0).optional(),
+      payloadHash: z.string().optional(),
     })
     .nullable()
     .optional(),
@@ -265,6 +283,7 @@ export const createPermitSchema = z
     targetBriefingText: optionalLongText,
     targetBriefingAt: isoDateTime.nullable().optional(),
     targetBriefingInstructorId: optionalId,
+    crewAcknowledgementsComplete: z.boolean().optional(),
     admissionAt: isoDateTime.nullable().optional(),
     admittedById: optionalId,
     acceptedByWorkProducerAt: isoDateTime.nullable().optional(),

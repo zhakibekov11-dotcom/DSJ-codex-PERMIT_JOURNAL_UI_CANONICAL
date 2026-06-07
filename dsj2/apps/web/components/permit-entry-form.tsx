@@ -314,7 +314,8 @@ export function PermitEntryForm({
           <SelectOptions options={contractorAccessActs} />
         </Select>
         <p className="text-xs text-slate-500">
-          Р”Р»СЏ CONTRACTOR_SITE_ACCESS precheck Р±Р»РѕРєРёСЂСѓРµС‚ РѕС‚СЃСѓС‚СЃС‚РІРёРµ active Appendix 3 act.
+          Р”Р»СЏ CONTRACTOR_SITE_ACCESS precheck Р±Р»РѕРєРёСЂСѓРµС‚
+          РѕС‚СЃСѓС‚СЃС‚РІРёРµ active Appendix 3 act.
         </p>
       </div>
 
@@ -548,6 +549,26 @@ export function PermitEntryForm({
               <SelectOptions options={employees} />
             </Select>
           </div>
+          <label className="flex items-start gap-3 rounded-lg border border-slate-200 p-4 text-sm text-slate-700 lg:col-span-2">
+            <input
+              type="checkbox"
+              name="crewAcknowledgementsComplete"
+              defaultChecked={
+                (initialValues?.crewInstructionAcknowledgements?.length ?? 0) >
+                  0 &&
+                initialValues?.crewInstructionAcknowledgements?.every(
+                  (acknowledgement) =>
+                    acknowledgement.status === "acknowledged",
+                )
+              }
+              className="mt-1"
+              disabled={locked}
+            />
+            <span>
+              Crew members acknowledged the target briefing. This is an MVP
+              payload status, not a legal electronic-signature ceremony.
+            </span>
+          </label>
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-slate-700">
               Admission date/time

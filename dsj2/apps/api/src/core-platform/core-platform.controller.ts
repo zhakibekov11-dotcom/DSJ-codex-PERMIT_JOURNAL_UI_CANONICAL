@@ -842,6 +842,23 @@ export class CorePlatformController {
     return this.workPermitsService.list(user, query);
   }
 
+  @Get("work-permits/journal/pdf")
+  @Roles(...signerRoles)
+  async workPermitJournalPdf(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(permitListFilterSchema))
+    query: Parameters<WorkPermitsService["downloadJournal"]>[1],
+    @Res() response: Response,
+  ) {
+    const buffer = await this.workPermitsService.downloadJournal(user, query);
+    response.setHeader("Content-Type", "application/pdf");
+    response.setHeader(
+      "Content-Disposition",
+      'attachment; filename="work-permit-journal.pdf"',
+    );
+    response.send(buffer);
+  }
+
   @Get("work-permits/:permitId")
   @Roles(...signerRoles)
   getWorkPermit(

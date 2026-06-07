@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   BadRequestException,
   ConflictException,
@@ -102,6 +102,10 @@ const permitInclude = {
           retentionPolicy: true,
         },
       },
+      exportSnapshots: {
+        orderBy: { generatedAt: "desc" as const },
+        take: 20,
+      },
     },
   },
   archiveRecord: {
@@ -171,6 +175,10 @@ function stringArray(value: unknown) {
 
 function canonicalHash(value: unknown) {
   return canonicalPermitPayloadHash(value);
+}
+
+function sha256(value: Buffer | string) {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 @Injectable()
@@ -516,14 +524,22 @@ export class WorkPermitsService {
         ...input.crew.employeeIds.map((employeeId) => ({
           employeeId,
           contractorWorkerId: null,
-          status: "pending" as const,
-          acknowledgedAt: null,
+          status: input.crewAcknowledgementsComplete
+            ? ("acknowledged" as const)
+            : ("pending" as const),
+          acknowledgedAt: input.crewAcknowledgementsComplete
+            ? (input.targetBriefingAt ?? now)
+            : null,
         })),
         ...input.crew.contractorWorkerIds.map((contractorWorkerId) => ({
           employeeId: null,
           contractorWorkerId,
-          status: "pending" as const,
-          acknowledgedAt: null,
+          status: input.crewAcknowledgementsComplete
+            ? ("acknowledged" as const)
+            : ("pending" as const),
+          acknowledgedAt: input.crewAcknowledgementsComplete
+            ? (input.targetBriefingAt ?? now)
+            : null,
         })),
       ],
       admissionAt: input.admissionAt ?? null,
@@ -592,70 +608,70 @@ export class WorkPermitsService {
       department,
       workSite,
     ] = await Promise.all([
-        uniqueEmployeeIds.length
-          ? this.prisma.employee.findMany({
-              where: {
-                id: { in: uniqueEmployeeIds },
-                companyId: organizationId,
-                isArchived: false,
-              },
-              select: { id: true, status: true },
-            })
-          : [],
-        uniqueWorkerIds.length
-          ? this.prisma.contractorWorker.findMany({
-              where: {
-                id: { in: uniqueWorkerIds },
-                organizationId,
-                isArchived: false,
-              },
-              select: {
-                id: true,
-                status: true,
-                contractorOrganizationId: true,
-              },
-            })
-          : [],
-        input.contractorId
-          ? this.prisma.contractorOrganization.findFirst({
-              where: { id: input.contractorId, organizationId, isActive: true },
-              select: { id: true },
-            })
-          : null,
-        input.contractorAccessActId
-          ? this.prisma.contractorAccessAct.findFirst({
-              where: { id: input.contractorAccessActId, organizationId },
-              select: {
-                id: true,
-                actNumber: true,
-                status: true,
-                validFrom: true,
-                validTo: true,
-                workArea: true,
-                contractorOrganizationId: true,
-                contractorRepresentativeId: true,
-              },
-            })
-          : null,
-        input.branchId
-          ? this.prisma.branch.findFirst({
-              where: { id: input.branchId, organizationId, isActive: true },
-              select: { id: true },
-            })
-          : null,
-        input.departmentId
-          ? this.prisma.department.findFirst({
-              where: { id: input.departmentId, companyId: organizationId },
-              select: { id: true },
-            })
-          : null,
-        input.workSiteId
-          ? this.prisma.workSite.findFirst({
-              where: { id: input.workSiteId, organizationId, isActive: true },
-              select: { id: true },
-            })
-          : null,
-      ]);
+      uniqueEmployeeIds.length
+        ? this.prisma.employee.findMany({
+            where: {
+              id: { in: uniqueEmployeeIds },
+              companyId: organizationId,
+              isArchived: false,
+            },
+            select: { id: true, status: true },
+          })
+        : [],
+      uniqueWorkerIds.length
+        ? this.prisma.contractorWorker.findMany({
+            where: {
+              id: { in: uniqueWorkerIds },
+              organizationId,
+              isArchived: false,
+            },
+            select: {
+              id: true,
+              status: true,
+              contractorOrganizationId: true,
+            },
+          })
+        : [],
+      input.contractorId
+        ? this.prisma.contractorOrganization.findFirst({
+            where: { id: input.contractorId, organizationId, isActive: true },
+            select: { id: true },
+          })
+        : null,
+      input.contractorAccessActId
+        ? this.prisma.contractorAccessAct.findFirst({
+            where: { id: input.contractorAccessActId, organizationId },
+            select: {
+              id: true,
+              actNumber: true,
+              status: true,
+              validFrom: true,
+              validTo: true,
+              workArea: true,
+              contractorOrganizationId: true,
+              contractorRepresentativeId: true,
+            },
+          })
+        : null,
+      input.branchId
+        ? this.prisma.branch.findFirst({
+            where: { id: input.branchId, organizationId, isActive: true },
+            select: { id: true },
+          })
+        : null,
+      input.departmentId
+        ? this.prisma.department.findFirst({
+            where: { id: input.departmentId, companyId: organizationId },
+            select: { id: true },
+          })
+        : null,
+      input.workSiteId
+        ? this.prisma.workSite.findFirst({
+            where: { id: input.workSiteId, organizationId, isActive: true },
+            select: { id: true },
+          })
+        : null,
+    ]);
 
     if (
       employees.length !== uniqueEmployeeIds.length ||
@@ -708,7 +724,9 @@ export class WorkPermitsService {
         Number.isNaN(effectiveTo.getTime()) ||
         effectiveTo.getTime() <= effectiveFrom.getTime()
       ) {
-        throw new BadRequestException("Work permit endAt must be after startAt.");
+        throw new BadRequestException(
+          "Work permit endAt must be after startAt.",
+        );
       }
       if (
         effectiveFrom.getTime() < contractorAccessAct.validFrom.getTime() ||
@@ -992,121 +1010,122 @@ export class WorkPermitsService {
 
     try {
       await this.prisma.$transaction(async (transaction) => {
-      await transaction.documentEnvelope.create({
-        data: {
-          id: envelopeId,
-          organizationId,
-          documentKind: "WORK_PERMIT",
-          scopeType: input.scopeType,
-          branchId: input.branchId ?? null,
-          departmentId: input.departmentId ?? null,
-          workSiteId: input.workSiteId ?? null,
-          businessObjectType: "WorkPermit",
-          businessObjectId: id,
-          documentNumber: input.permitNumber,
-          title: input.workDescription,
-          status: "DRAFT",
-          approvalRouteId: route?.id ?? null,
-          createdByUserId: user.userId,
-        },
-      });
-      await transaction.documentVersion.create({
-        data: {
-          id: documentVersionId,
-          envelopeId,
-          versionNo: 1,
-          status: "DRAFT",
-          payloadJson: payload as Prisma.InputJsonValue,
-          renderedHash: payloadHash,
-          createdByUserId: user.userId,
-          effectiveFrom: new Date(input.startAt),
-          effectiveTo: new Date(input.endAt),
-        },
-      });
-      await transaction.workPermit.create({
-        data: {
-          id,
-          organizationId,
-          permitCode: input.permitNumber,
-          journalRegistrationNumber: input.journalRegistrationNumber,
-          permitType: input.permitType,
-          workType: input.workType,
-          title: input.workDescription,
-          workDescription: input.workDescription,
-          workplace: input.workplace,
-          scopeType: input.scopeType,
-          branchId: input.branchId ?? null,
-          departmentId: input.departmentId ?? null,
-          workSiteId: input.workSiteId ?? null,
-          contractorOrganizationId: input.contractorId ?? null,
-          contractorRepresentativeId: input.contractorRepresentativeId ?? null,
-          contractorAccessActId: input.contractorAccessActId ?? null,
-          issuerEmployeeId: input.issuerId ?? null,
-          responsibleManagerEmployeeId: input.responsibleManagerId ?? null,
-          workProducerEmployeeId: input.workProducerId ?? null,
-          admitterEmployeeId: input.admitterId ?? null,
-          observerEmployeeId: input.observerId ?? null,
-          status: "DRAFT",
-          documentEnvelopeId: envelopeId,
-          currentVersionId: null,
-          effectiveFrom: new Date(input.startAt),
-          effectiveTo: new Date(input.endAt),
-          createdByUserId: user.userId,
-          updatedByUserId: user.userId,
-        },
-      });
-      await transaction.workPermitVersion.create({
-        data: {
-          id: workPermitVersionId,
-          permitId: id,
-          versionNo: 1,
-          status: "DRAFT",
-          payloadJson: payload as Prisma.InputJsonValue,
-          payloadHash,
-          documentEnvelopeId: envelopeId,
-          documentVersionId,
-          createdByUserId: user.userId,
-        },
-      });
-      await transaction.documentEnvelope.update({
-        where: { id: envelopeId },
-        data: { currentVersionId: documentVersionId },
-      });
-      await transaction.workPermit.update({
-        where: { id },
-        data: { currentVersionId: workPermitVersionId },
-      });
-      const brigade = await transaction.brigade.create({
-        data: {
-          permitId: id,
-          brigadeCode: `${input.permitNumber}-BRG`,
-          title: "Main work crew",
-          leaderEmployeeId: input.workProducerId ?? null,
-        },
-      });
-      if (
-        input.crew.employeeIds.length ||
-        input.crew.contractorWorkerIds.length
-      ) {
-        await transaction.brigadeMember.createMany({
-          data: [
-            ...input.crew.employeeIds.map((employeeId) => ({
-              brigadeId: brigade.id,
-              employeeId,
-              contractorWorkerId: null,
-              roleCode: "EXECUTOR",
-              status: "ASSIGNED" as const,
-            })),
-            ...input.crew.contractorWorkerIds.map((contractorWorkerId) => ({
-              brigadeId: brigade.id,
-              employeeId: null,
-              contractorWorkerId,
-              roleCode: "EXECUTOR",
-              status: "ASSIGNED" as const,
-            })),
-          ],
+        await transaction.documentEnvelope.create({
+          data: {
+            id: envelopeId,
+            organizationId,
+            documentKind: "WORK_PERMIT",
+            scopeType: input.scopeType,
+            branchId: input.branchId ?? null,
+            departmentId: input.departmentId ?? null,
+            workSiteId: input.workSiteId ?? null,
+            businessObjectType: "WorkPermit",
+            businessObjectId: id,
+            documentNumber: input.permitNumber,
+            title: input.workDescription,
+            status: "DRAFT",
+            approvalRouteId: route?.id ?? null,
+            createdByUserId: user.userId,
+          },
         });
-      }
+        await transaction.documentVersion.create({
+          data: {
+            id: documentVersionId,
+            envelopeId,
+            versionNo: 1,
+            status: "DRAFT",
+            payloadJson: payload as Prisma.InputJsonValue,
+            renderedHash: payloadHash,
+            createdByUserId: user.userId,
+            effectiveFrom: new Date(input.startAt),
+            effectiveTo: new Date(input.endAt),
+          },
+        });
+        await transaction.workPermit.create({
+          data: {
+            id,
+            organizationId,
+            permitCode: input.permitNumber,
+            journalRegistrationNumber: input.journalRegistrationNumber,
+            permitType: input.permitType,
+            workType: input.workType,
+            title: input.workDescription,
+            workDescription: input.workDescription,
+            workplace: input.workplace,
+            scopeType: input.scopeType,
+            branchId: input.branchId ?? null,
+            departmentId: input.departmentId ?? null,
+            workSiteId: input.workSiteId ?? null,
+            contractorOrganizationId: input.contractorId ?? null,
+            contractorRepresentativeId:
+              input.contractorRepresentativeId ?? null,
+            contractorAccessActId: input.contractorAccessActId ?? null,
+            issuerEmployeeId: input.issuerId ?? null,
+            responsibleManagerEmployeeId: input.responsibleManagerId ?? null,
+            workProducerEmployeeId: input.workProducerId ?? null,
+            admitterEmployeeId: input.admitterId ?? null,
+            observerEmployeeId: input.observerId ?? null,
+            status: "DRAFT",
+            documentEnvelopeId: envelopeId,
+            currentVersionId: null,
+            effectiveFrom: new Date(input.startAt),
+            effectiveTo: new Date(input.endAt),
+            createdByUserId: user.userId,
+            updatedByUserId: user.userId,
+          },
+        });
+        await transaction.workPermitVersion.create({
+          data: {
+            id: workPermitVersionId,
+            permitId: id,
+            versionNo: 1,
+            status: "DRAFT",
+            payloadJson: payload as Prisma.InputJsonValue,
+            payloadHash,
+            documentEnvelopeId: envelopeId,
+            documentVersionId,
+            createdByUserId: user.userId,
+          },
+        });
+        await transaction.documentEnvelope.update({
+          where: { id: envelopeId },
+          data: { currentVersionId: documentVersionId },
+        });
+        await transaction.workPermit.update({
+          where: { id },
+          data: { currentVersionId: workPermitVersionId },
+        });
+        const brigade = await transaction.brigade.create({
+          data: {
+            permitId: id,
+            brigadeCode: `${input.permitNumber}-BRG`,
+            title: "Main work crew",
+            leaderEmployeeId: input.workProducerId ?? null,
+          },
+        });
+        if (
+          input.crew.employeeIds.length ||
+          input.crew.contractorWorkerIds.length
+        ) {
+          await transaction.brigadeMember.createMany({
+            data: [
+              ...input.crew.employeeIds.map((employeeId) => ({
+                brigadeId: brigade.id,
+                employeeId,
+                contractorWorkerId: null,
+                roleCode: "EXECUTOR",
+                status: "ASSIGNED" as const,
+              })),
+              ...input.crew.contractorWorkerIds.map((contractorWorkerId) => ({
+                brigadeId: brigade.id,
+                employeeId: null,
+                contractorWorkerId,
+                roleCode: "EXECUTOR",
+                status: "ASSIGNED" as const,
+              })),
+            ],
+          });
+        }
       });
     } catch (error) {
       this.duplicatePermitConflict(error);
@@ -1224,10 +1243,7 @@ export class WorkPermitsService {
         input.safetyMeasures ?? String(current.safetyMeasures ?? ""),
       workplacePreparationMeasures:
         input.workplacePreparationMeasures === undefined
-          ? (current.workplacePreparationMeasures as
-              | string
-              | null
-              | undefined)
+          ? (current.workplacePreparationMeasures as string | null | undefined)
           : input.workplacePreparationMeasures,
       safetyMeasureExecutors:
         input.safetyMeasureExecutors === undefined
@@ -1280,6 +1296,15 @@ export class WorkPermitsService {
         input.targetBriefingInstructorId === undefined
           ? (current.targetBriefingInstructorId as string | null | undefined)
           : input.targetBriefingInstructorId,
+      crewAcknowledgementsComplete:
+        input.crewAcknowledgementsComplete === undefined
+          ? Array.isArray(current.crewInstructionAcknowledgements) &&
+            current.crewInstructionAcknowledgements.length > 0 &&
+            current.crewInstructionAcknowledgements.every(
+              (acknowledgement) =>
+                objectValue(acknowledgement).status === "acknowledged",
+            )
+          : input.crewAcknowledgementsComplete,
       admissionAt:
         input.admissionAt === undefined
           ? (current.admissionAt as string | null | undefined)
@@ -1323,93 +1348,94 @@ export class WorkPermitsService {
 
     try {
       await this.prisma.$transaction(async (transaction) => {
-      await transaction.workPermit.update({
-        where: { id },
-        data: {
-          permitCode: merged.permitNumber,
-          journalRegistrationNumber: merged.journalRegistrationNumber,
-          permitType: merged.permitType,
-          workType: merged.workType,
-          title: merged.workDescription,
-          workDescription: merged.workDescription,
-          workplace: merged.workplace,
-          scopeType: merged.scopeType,
-          branchId: merged.branchId ?? null,
-          departmentId: merged.departmentId ?? null,
-          workSiteId: merged.workSiteId ?? null,
-          contractorOrganizationId: merged.contractorId ?? null,
-          contractorRepresentativeId: merged.contractorRepresentativeId ?? null,
-          contractorAccessActId: merged.contractorAccessActId ?? null,
-          issuerEmployeeId: merged.issuerId ?? null,
-          responsibleManagerEmployeeId: merged.responsibleManagerId ?? null,
-          workProducerEmployeeId: merged.workProducerId ?? null,
-          admitterEmployeeId: merged.admitterId ?? null,
-          observerEmployeeId: merged.observerId ?? null,
-          status: "DRAFT",
-          effectiveFrom: new Date(merged.startAt),
-          effectiveTo: new Date(merged.endAt),
-          rejectionReason: null,
-          suspensionReason: null,
-          cancellationReason: null,
-          updatedByUserId: user.userId,
-        },
-      });
-      await transaction.workPermitApproval.deleteMany({
-        where: { permitId: id },
-      });
-      const brigade =
-        permit.brigades[0] ??
-        (await transaction.brigade.create({
+        await transaction.workPermit.update({
+          where: { id },
           data: {
-            permitId: id,
+            permitCode: merged.permitNumber,
+            journalRegistrationNumber: merged.journalRegistrationNumber,
+            permitType: merged.permitType,
+            workType: merged.workType,
+            title: merged.workDescription,
+            workDescription: merged.workDescription,
+            workplace: merged.workplace,
+            scopeType: merged.scopeType,
+            branchId: merged.branchId ?? null,
+            departmentId: merged.departmentId ?? null,
+            workSiteId: merged.workSiteId ?? null,
+            contractorOrganizationId: merged.contractorId ?? null,
+            contractorRepresentativeId:
+              merged.contractorRepresentativeId ?? null,
+            contractorAccessActId: merged.contractorAccessActId ?? null,
+            issuerEmployeeId: merged.issuerId ?? null,
+            responsibleManagerEmployeeId: merged.responsibleManagerId ?? null,
+            workProducerEmployeeId: merged.workProducerId ?? null,
+            admitterEmployeeId: merged.admitterId ?? null,
+            observerEmployeeId: merged.observerId ?? null,
+            status: "DRAFT",
+            effectiveFrom: new Date(merged.startAt),
+            effectiveTo: new Date(merged.endAt),
+            rejectionReason: null,
+            suspensionReason: null,
+            cancellationReason: null,
+            updatedByUserId: user.userId,
+          },
+        });
+        await transaction.workPermitApproval.deleteMany({
+          where: { permitId: id },
+        });
+        const brigade =
+          permit.brigades[0] ??
+          (await transaction.brigade.create({
+            data: {
+              permitId: id,
+              brigadeCode: `${merged.permitNumber}-BRG`,
+              title: "Main work crew",
+              leaderEmployeeId: merged.workProducerId ?? null,
+            },
+          }));
+        await transaction.brigade.update({
+          where: { id: brigade.id },
+          data: {
             brigadeCode: `${merged.permitNumber}-BRG`,
-            title: "Main work crew",
             leaderEmployeeId: merged.workProducerId ?? null,
           },
-        }));
-      await transaction.brigade.update({
-        where: { id: brigade.id },
-        data: {
-          brigadeCode: `${merged.permitNumber}-BRG`,
-          leaderEmployeeId: merged.workProducerId ?? null,
-        },
-      });
-      await transaction.brigadeMember.deleteMany({
-        where: { brigadeId: brigade.id },
-      });
-      if (
-        merged.crew.employeeIds.length ||
-        merged.crew.contractorWorkerIds.length
-      ) {
-        await transaction.brigadeMember.createMany({
-          data: [
-            ...merged.crew.employeeIds.map((employeeId) => ({
-              brigadeId: brigade.id,
-              employeeId,
-              contractorWorkerId: null,
-              roleCode: "EXECUTOR",
-              status: "ASSIGNED" as const,
-            })),
-            ...merged.crew.contractorWorkerIds.map((contractorWorkerId) => ({
-              brigadeId: brigade.id,
-              employeeId: null,
-              contractorWorkerId,
-              roleCode: "EXECUTOR",
-              status: "ASSIGNED" as const,
-            })),
-          ],
         });
-      }
-      await this.appendVersion(
-        transaction,
-        {
-          ...permit,
-          effectiveFrom: new Date(merged.startAt),
-          effectiveTo: new Date(merged.endAt),
-        },
-        payload,
-        user.userId,
-      );
+        await transaction.brigadeMember.deleteMany({
+          where: { brigadeId: brigade.id },
+        });
+        if (
+          merged.crew.employeeIds.length ||
+          merged.crew.contractorWorkerIds.length
+        ) {
+          await transaction.brigadeMember.createMany({
+            data: [
+              ...merged.crew.employeeIds.map((employeeId) => ({
+                brigadeId: brigade.id,
+                employeeId,
+                contractorWorkerId: null,
+                roleCode: "EXECUTOR",
+                status: "ASSIGNED" as const,
+              })),
+              ...merged.crew.contractorWorkerIds.map((contractorWorkerId) => ({
+                brigadeId: brigade.id,
+                employeeId: null,
+                contractorWorkerId,
+                roleCode: "EXECUTOR",
+                status: "ASSIGNED" as const,
+              })),
+            ],
+          });
+        }
+        await this.appendVersion(
+          transaction,
+          {
+            ...permit,
+            effectiveFrom: new Date(merged.startAt),
+            effectiveTo: new Date(merged.endAt),
+          },
+          payload,
+          user.userId,
+        );
       });
     } catch (error) {
       this.duplicatePermitConflict(error);
@@ -1431,12 +1457,10 @@ export class WorkPermitsService {
     record: Record<string, unknown>,
     overrides: Record<string, unknown> = {},
   ) {
-    const source = { sourceType, ...record, ...overrides };
-    return {
+    const safeEvidence = {
       id: String(record.id),
       sourceType,
       sourceStatus: String(record.status ?? "ACTIVE"),
-      sourceHash: canonicalHash(source),
       issuedAt:
         record.issueDate instanceof Date
           ? record.issueDate.toISOString()
@@ -1467,6 +1491,11 @@ export class WorkPermitsService {
             record.itemCode ??
             "",
         ) || null,
+      ...overrides,
+    };
+    return {
+      ...safeEvidence,
+      sourceHash: canonicalHash(safeEvidence),
     };
   }
 
@@ -1476,6 +1505,59 @@ export class WorkPermitsService {
   ) {
     const expires = record.expiryDate ?? record.validUntil ?? null;
     return !expires || expires.getTime() >= at.getTime();
+  }
+
+  private precheckPayloadHash(entry: Record<string, unknown>) {
+    const businessEntry = { ...entry };
+    for (const key of [
+      "status",
+      "precheckSummary",
+      "precheckChecks",
+      "trainingCheckSnapshot",
+      "briefingCheckSnapshot",
+      "certificateCheckSnapshot",
+      "medicalCheckSnapshot",
+      "ppeIssuedSnapshot",
+      "requiredDocumentSnapshot",
+      "contractorAccessActSnapshot",
+      "approvalStatus",
+      "signatureStatus",
+      "approvalRequestedAt",
+      "approvalComment",
+      "submitAt",
+      "submitComment",
+      "confirmAt",
+      "confirmComment",
+      "approveAt",
+      "approveComment",
+      "preparesignAt",
+      "preparesignComment",
+      "activateAt",
+      "activateComment",
+      "documentVersionHash",
+      "signedPayloadHash",
+      "updatedAt",
+    ]) {
+      delete businessEntry[key];
+    }
+    return canonicalHash(businessEntry);
+  }
+
+  private assertCurrentPrecheck(permit: PermitWithDetails) {
+    const latestRun = permit.precheckRuns[0];
+    const entry = this.payloadEntry(permit);
+    const summary = objectValue(entry.precheckSummary);
+    const currentPayloadHash = this.precheckPayloadHash(entry);
+    if (
+      !latestRun ||
+      latestRun.result !== "PASS" ||
+      summary.result !== "PASS" ||
+      summary.payloadHash !== currentPayloadHash
+    ) {
+      throw new BadRequestException(
+        "A successful precheck for the current permit payload is required.",
+      );
+    }
   }
 
   async precheck(user: AuthenticatedUser, id: string) {
@@ -1657,26 +1739,16 @@ export class WorkPermitsService {
         : null,
     ]);
 
-    const activePeople =
-      employees.length === participantEmployeeIds.length &&
-      employees.every(
-        (employee) => employee.status === "active" && !employee.isArchived,
-      ) &&
-      workers.length === participantWorkerIds.length &&
-      workers.every(
-        (worker) => worker.status === "active" && !worker.isArchived,
-      );
     const contractorWorkersInScope =
       participantWorkerIds.length === 0 ||
       Boolean(
         permit.contractorOrganizationId &&
-          contractor &&
-          workers.length === participantWorkerIds.length &&
-          workers.every(
-            (worker) =>
-              worker.contractorOrganizationId ===
-              permit.contractorOrganizationId,
-          ),
+        contractor &&
+        workers.length === participantWorkerIds.length &&
+        workers.every(
+          (worker) =>
+            worker.contractorOrganizationId === permit.contractorOrganizationId,
+        ),
       );
     const trainingEvidence = trainings
       .filter(
@@ -1718,17 +1790,6 @@ export class WorkPermitsService {
         ),
     ];
     const medicalEvidence = [
-      ...employeeDocuments
-        .filter(
-          (record) =>
-            medicalIds.includes(record.id) &&
-            record.status === "ACTIVE" &&
-            record.verificationStatus === "VERIFIED" &&
-            this.validUntil(record, validAt),
-        )
-        .map((record) =>
-          this.snapshotEvidence("EMPLOYEE_MEDICAL_DOCUMENT", record),
-        ),
       ...qualifications
         .filter(
           (record) =>
@@ -1773,139 +1834,362 @@ export class WorkPermitsService {
               crewWorkerIds.includes(record.contractorWorkerId))),
       )
       .map((record) => this.snapshotEvidence("PPE_ISSUE", record));
-    const requiresContractor =
-      permit.permitType === "CONTRACTOR_ACCESS" ||
-      permit.workType === "CONTRACTOR_SITE_ACCESS";
     const contractorAccessActCoversPermit = Boolean(
       contractorAccessAct &&
-        contractorAccessAct.status === "ACTIVE" &&
+      contractorAccessAct.status === "ACTIVE" &&
+      permit.contractorOrganizationId &&
+      contractorAccessAct.contractorOrganizationId ===
         permit.contractorOrganizationId &&
-        contractorAccessAct.contractorOrganizationId ===
-          permit.contractorOrganizationId &&
-        permit.effectiveFrom &&
-        permit.effectiveTo &&
-        permit.effectiveFrom.getTime() >=
-          contractorAccessAct.validFrom.getTime() &&
-        permit.effectiveTo.getTime() <= contractorAccessAct.validTo.getTime(),
+      permit.effectiveFrom &&
+      permit.effectiveTo &&
+      permit.effectiveFrom.getTime() >=
+        contractorAccessAct.validFrom.getTime() &&
+      permit.effectiveTo.getTime() <= contractorAccessAct.validTo.getTime(),
     );
+    const checkedAtIso = checkedAt.toISOString();
+    type CheckInput = {
+      code: string;
+      label: string;
+      passed: boolean;
+      severity: "BLOCKER" | "WARNING";
+      message: string;
+      subjectType:
+        | "EMPLOYEE"
+        | "CONTRACTOR_WORKER"
+        | "CONTRACTOR_ACCESS_ACT"
+        | "WORKPLACE"
+        | "DOCUMENT"
+        | "PPE";
+      subjectId?: string | null;
+      evidenceIds?: string[];
+      expiresAt?: string | null;
+      sourceType?: string | null;
+      sourceStatus?: string | null;
+    };
+    const check = (input: CheckInput) => ({
+      code: input.code,
+      label: input.label,
+      result: input.passed ? ("PASS" as const) : ("FAIL" as const),
+      severity: input.severity,
+      message: input.message,
+      subjectType: input.subjectType,
+      subjectId: input.subjectId ?? null,
+      evidenceIds: input.evidenceIds ?? [],
+      checkedAt: checkedAtIso,
+      expiresAt: input.expiresAt ?? null,
+      sourceType: input.sourceType ?? null,
+      sourceStatus: input.sourceStatus ?? null,
+    });
+    const evidenceExpiry = (
+      evidence: ReturnType<WorkPermitsService["snapshotEvidence"]>[],
+    ) =>
+      evidence
+        .map((item) => item.validUntil)
+        .filter((value): value is string => Boolean(value))
+        .sort()[0] ?? null;
+    const evidenceCheck = (
+      code: string,
+      label: string,
+      requestedIds: string[],
+      evidence: ReturnType<WorkPermitsService["snapshotEvidence"]>[],
+      subjectType: CheckInput["subjectType"],
+      required: boolean,
+    ) => {
+      const evidenceIds = [...new Set(evidence.map((item) => item.id))];
+      const passed =
+        requestedIds.length > 0 &&
+        requestedIds.every((evidenceId) => evidenceIds.includes(evidenceId));
+      const severity =
+        requestedIds.length > 0 || required
+          ? ("BLOCKER" as const)
+          : ("WARNING" as const);
+      return check({
+        code,
+        label,
+        passed,
+        severity,
+        subjectType,
+        evidenceIds,
+        expiresAt: evidenceExpiry(evidence),
+        sourceType:
+          evidence.length === 1 ? (evidence[0].sourceType ?? null) : null,
+        sourceStatus:
+          evidence.length === 1 ? (evidence[0].sourceStatus ?? null) : null,
+        message: passed
+          ? `${label}: database records are valid for the permit period.`
+          : requestedIds.length
+            ? `${label}: an explicit evidence ID is missing, expired, inactive, tenant-invalid, or belongs to another subject.`
+            : required
+              ? `${label}: evidence is required by the permit payload but was not provided.`
+              : `${label}: no evidence was provided and the current model has no work/position requirement matrix.`,
+      });
+    };
+    const employeePeopleValid =
+      employees.length === participantEmployeeIds.length &&
+      employees.every(
+        (employee) => employee.status === "active" && !employee.isArchived,
+      );
+    const workerPeopleValid =
+      workers.length === participantWorkerIds.length &&
+      workers.every(
+        (worker) => worker.status === "active" && !worker.isArchived,
+      );
+    const actRequired = permit.workType === "CONTRACTOR_SITE_ACCESS";
+    const actPresent = Boolean(contractorAccessAct);
+    const actActiveAndCompatible = Boolean(
+      contractorAccessAct &&
+      contractorAccessAct.status === "ACTIVE" &&
+      (!permit.contractorRepresentativeId ||
+        !contractorAccessAct.contractorRepresentativeId ||
+        contractorAccessAct.contractorRepresentativeId ===
+          permit.contractorRepresentativeId),
+    );
+    const acknowledgements = Array.isArray(
+      entry.crewInstructionAcknowledgements,
+    )
+      ? entry.crewInstructionAcknowledgements.map(objectValue)
+      : [];
+    const targetBriefingValid =
+      crewEmployeeIds.length + crewWorkerIds.length > 0 &&
+      Boolean(entry.targetBriefingText) &&
+      Boolean(entry.targetBriefingAt) &&
+      Boolean(entry.targetBriefingInstructorId) &&
+      acknowledgements.length ===
+        crewEmployeeIds.length + crewWorkerIds.length &&
+      acknowledgements.every(
+        (acknowledgement) =>
+          acknowledgement.status === "acknowledged" &&
+          Boolean(acknowledgement.acknowledgedAt),
+      );
     const checks = [
-      {
-        code: "ACTIVE_PARTICIPANTS",
-        label: "Active permit participants",
-        passed:
-          activePeople && crewEmployeeIds.length + crewWorkerIds.length > 0,
-        evidence: [...participantEmployeeIds, ...participantWorkerIds],
-      },
-      {
-        code: "ACTIVE_WORK_SITE",
-        label: "Active work site",
-        passed: !permit.workSiteId || Boolean(workSite),
-        evidence: permit.workSiteId ? [permit.workSiteId] : [],
-      },
-      {
-        code: "TRAINING",
-        label: "Completed training and exams",
-        passed:
-          crewEmployeeIds.length === 0 ||
-          crewEmployeeIds.every((employeeId) =>
-            trainings.some(
-              (record) =>
-                record.employeeId === employeeId &&
-                record.status === "COMPLETED" &&
-                (!record.trainingProgram.requiresExam ||
-                  record.examAttempts.length > 0),
-            ),
-          ),
-        evidence: trainingEvidence.map((item) => item.id),
-      },
-      {
-        code: "BRIEFING",
-        label: "Signed briefing",
-        passed:
-          crewEmployeeIds.length === 0 ||
-          crewEmployeeIds.every((employeeId) =>
-            briefings.some(
-              (record) =>
-                record.employeeId === employeeId && record.status === "SIGNED",
-            ),
-          ),
-        evidence: briefingEvidence.map((item) => item.id),
-      },
-      {
-        code: "CERTIFICATES",
-        label: "Valid certificates and qualifications",
-        passed:
-          certificateIds.length > 0 &&
-          certificateEvidence.length === certificateIds.length,
-        evidence: certificateEvidence.map((item) => item.id),
-      },
-      {
-        code: "MEDICAL_CLEARANCE",
-        label: "Valid medical clearance",
-        passed:
-          medicalIds.length > 0 && medicalEvidence.length === medicalIds.length,
-        evidence: medicalEvidence.map((item) => item.id),
-      },
-      {
-        code: "PPE_ISSUED",
-        label: "PPE issue registry",
-        passed:
-          ppeIds.length > 0 &&
-          ppeEvidence.length === ppeIds.length &&
-          crewEmployeeIds.length + crewWorkerIds.length <= ppeEvidence.length,
-        evidence: ppeEvidence.map((item) => item.id),
-      },
-      {
-        code: "REQUIRED_DOCUMENTS",
-        label: "Required source documents",
-        passed:
-          requiredIds.length > 0 &&
-          requiredEvidence.length === requiredIds.length,
-        evidence: requiredEvidence.map((item) => item.id),
-      },
-      {
-        code: "CONTRACTOR_SCOPE",
-        label: "Contractor and representative",
-        passed:
-          !requiresContractor ||
-          Boolean(
-            permit.contractorOrganizationId &&
-            permit.contractorRepresentativeId &&
-            contractor,
-          ),
-        evidence: [
-          permit.contractorOrganizationId,
-          permit.contractorRepresentativeId,
-        ].filter((value): value is string => Boolean(value)),
-      },
-      {
-        code: "CONTRACTOR_WORKERS",
-        label: "Contractor workers match selected contractor",
+      check({
+        code: "INTERNAL_EMPLOYEE_ACTIVE",
+        label: "Internal employees are active",
+        passed: employeePeopleValid,
+        severity: "BLOCKER",
+        subjectType: "EMPLOYEE",
+        evidenceIds: employees.map((employee) => employee.id),
+        sourceType: "EMPLOYEE",
+        sourceStatus: employeePeopleValid ? "active" : "invalid",
+        message: employeePeopleValid
+          ? "All assigned internal employees exist in the organization and are active."
+          : "An assigned employee is missing, inactive, archived, or outside the organization.",
+      }),
+      check({
+        code: "CONTRACTOR_WORKER_ACTIVE",
+        label: "Contractor workers are active",
+        passed: workerPeopleValid,
+        severity: "BLOCKER",
+        subjectType: "CONTRACTOR_WORKER",
+        evidenceIds: workers.map((worker) => worker.id),
+        sourceType: "CONTRACTOR_WORKER",
+        sourceStatus: workerPeopleValid ? "active" : "invalid",
+        message: workerPeopleValid
+          ? "All assigned contractor workers exist in the organization and are active."
+          : "An assigned contractor worker is missing, inactive, archived, or outside the organization.",
+      }),
+      check({
+        code: "CONTRACTOR_WORKER_MATCHES_CONTRACTOR",
+        label: "Contractor workers match the selected contractor",
         passed: contractorWorkersInScope,
-        evidence: participantWorkerIds,
-      },
-      {
-        code: "CONTRACTOR_ACCESS_ACT",
-        label: "Active contractor access act",
+        severity: "BLOCKER",
+        subjectType: "CONTRACTOR_WORKER",
+        evidenceIds: participantWorkerIds,
+        sourceType: "CONTRACTOR_WORKER",
+        sourceStatus: contractorWorkersInScope ? "MATCHED" : "MISMATCH",
+        message: contractorWorkersInScope
+          ? "Contractor worker ownership matches the selected contractor."
+          : "A contractor worker or representative belongs to another contractor.",
+      }),
+      check({
+        code: "CONTRACTOR_ACCESS_ACT_PRESENT",
+        label: "Contractor access act is linked",
+        passed: actRequired
+          ? actPresent
+          : !permit.contractorOrganizationId || actPresent,
+        severity: actRequired ? "BLOCKER" : "WARNING",
+        subjectType: "CONTRACTOR_ACCESS_ACT",
+        subjectId: contractorAccessAct?.id ?? null,
+        evidenceIds: contractorAccessAct ? [contractorAccessAct.id] : [],
+        sourceType: "CONTRACTOR_ACCESS_ACT",
+        sourceStatus: contractorAccessAct?.status ?? null,
+        message: actPresent
+          ? "A tenant-scoped ContractorAccessAct record is linked."
+          : actRequired
+            ? "CONTRACTOR_SITE_ACCESS requires a linked ContractorAccessAct."
+            : permit.contractorOrganizationId
+              ? "No ContractorAccessAct is linked; the current product decision does not make it mandatory for GENERAL_HIGH_RISK."
+              : "Contractor access act is not applicable.",
+      }),
+      check({
+        code: "CONTRACTOR_ACCESS_ACT_ACTIVE",
+        label: "Contractor access act is active and compatible",
+        passed: actPresent ? actActiveAndCompatible : !actRequired,
+        severity: actRequired || actPresent ? "BLOCKER" : "WARNING",
+        subjectType: "CONTRACTOR_ACCESS_ACT",
+        subjectId: contractorAccessAct?.id ?? null,
+        evidenceIds: contractorAccessAct ? [contractorAccessAct.id] : [],
+        sourceType: "CONTRACTOR_ACCESS_ACT",
+        sourceStatus: contractorAccessAct?.status ?? null,
+        message: !actPresent
+          ? "No act record was available for status validation."
+          : actActiveAndCompatible
+            ? "The act is ACTIVE and its representative is compatible with the permit."
+            : "The act is inactive or its contractor representative conflicts with the permit.",
+      }),
+      check({
+        code: "CONTRACTOR_ACCESS_ACT_DATE_COVERAGE",
+        label: "Contractor access act covers permit dates",
+        passed: actPresent ? contractorAccessActCoversPermit : !actRequired,
+        severity: actRequired || actPresent ? "BLOCKER" : "WARNING",
+        subjectType: "CONTRACTOR_ACCESS_ACT",
+        subjectId: contractorAccessAct?.id ?? null,
+        evidenceIds: contractorAccessAct ? [contractorAccessAct.id] : [],
+        expiresAt: contractorAccessAct?.validTo.toISOString() ?? null,
+        sourceType: "CONTRACTOR_ACCESS_ACT",
+        sourceStatus: contractorAccessAct?.status ?? null,
+        message: !actPresent
+          ? "No act record was available for date validation."
+          : contractorAccessActCoversPermit
+            ? "The permit validity is fully inside the act validity period."
+            : "The act belongs to another contractor or does not cover the full permit period.",
+      }),
+      evidenceCheck(
+        "TRAINING_EVIDENCE_VALID",
+        "Training and knowledge-check evidence",
+        trainingIds,
+        trainingEvidence,
+        "DOCUMENT",
+        false,
+      ),
+      evidenceCheck(
+        "BRIEFING_EVIDENCE_VALID",
+        "Briefing evidence",
+        briefingIds,
+        briefingEvidence,
+        "DOCUMENT",
+        false,
+      ),
+      check({
+        code: "TARGET_BRIEFING_PRESENT",
+        label: "Target briefing and crew acknowledgement",
+        passed: targetBriefingValid,
+        severity: "BLOCKER",
+        subjectType: "EMPLOYEE",
+        subjectId:
+          typeof entry.targetBriefingInstructorId === "string"
+            ? entry.targetBriefingInstructorId
+            : null,
+        evidenceIds: [...crewEmployeeIds, ...crewWorkerIds],
+        sourceType: "PERMIT_PAYLOAD",
+        sourceStatus: targetBriefingValid ? "ACKNOWLEDGED" : "INCOMPLETE",
+        message: targetBriefingValid
+          ? "Target briefing details and payload-level crew acknowledgements are complete."
+          : "A non-empty crew, target briefing text/date/instructor, and acknowledgement by every crew member are required.",
+      }),
+      evidenceCheck(
+        "QUALIFICATION_OR_CERTIFICATE_VALID",
+        "Qualification or certificate evidence",
+        certificateIds,
+        certificateEvidence,
+        "DOCUMENT",
+        false,
+      ),
+      evidenceCheck(
+        "MEDICAL_CLEARANCE_VALID",
+        "Medical clearance evidence",
+        medicalIds,
+        medicalEvidence,
+        "DOCUMENT",
+        false,
+      ),
+      check({
+        code: "MEDICAL_SNAPSHOT_DIAGNOSIS_FREE",
+        label: "Medical snapshot contains no diagnosis data",
+        passed: true,
+        severity: "BLOCKER",
+        subjectType: "DOCUMENT",
+        evidenceIds: medicalEvidence.map((item) => item.id),
+        expiresAt: evidenceExpiry(medicalEvidence),
+        sourceType: "MEDICAL_CLEARANCE",
+        sourceStatus: "STATUS_ONLY",
+        message:
+          "Only clearance status, dates, subject, document reference, and verification metadata are snapshotted.",
+      }),
+      evidenceCheck(
+        "PPE_ISSUED_VALID",
+        "Issued PPE evidence",
+        ppeIds,
+        ppeEvidence,
+        "PPE",
+        Boolean(entry.ppeRequirements),
+      ),
+      evidenceCheck(
+        "REQUIRED_DOCUMENTS_PRESENT",
+        "Required documents",
+        requiredIds,
+        requiredEvidence,
+        "DOCUMENT",
+        false,
+      ),
+      check({
+        code: "WORKPLACE_PREPARATION_MEASURES_PRESENT",
+        label: "Workplace preparation measures",
         passed:
-          permit.workType !== "CONTRACTOR_SITE_ACCESS" ||
-          contractorAccessActCoversPermit,
-        evidence: [
-          permit.contractorAccessActId,
-          contractorAccessAct?.actNumber,
-        ].filter((value): value is string => Boolean(value)),
-      },
-    ].map((check) => ({
-      code: check.code,
-      label: check.label,
-      result: check.passed ? ("PASS" as const) : ("FAIL" as const),
-      severity: "BLOCKER" as const,
-      message: check.passed
-        ? `${check.label}: passed.`
-        : `${check.label}: missing, expired, inactive, or tenant-invalid evidence.`,
-      evidence: check.evidence,
-    }));
-    const result = checks.every((check) => check.result === "PASS")
+          permit.workType !== "GENERAL_HIGH_RISK" ||
+          (Boolean(String(entry.workplacePreparationMeasures ?? "").trim()) &&
+            (!permit.workSiteId || Boolean(workSite))),
+        severity: "BLOCKER",
+        subjectType: "WORKPLACE",
+        subjectId: permit.workSiteId,
+        evidenceIds: permit.workSiteId ? [permit.workSiteId] : [],
+        sourceType: permit.workSiteId ? "WORK_SITE" : "PERMIT_PAYLOAD",
+        sourceStatus:
+          permit.workSiteId && !workSite ? "INACTIVE_OR_MISSING" : "PRESENT",
+        message:
+          permit.workType !== "GENERAL_HIGH_RISK" ||
+          (Boolean(String(entry.workplacePreparationMeasures ?? "").trim()) &&
+            (!permit.workSiteId || Boolean(workSite)))
+            ? "Workplace preparation measures are present and the referenced work site is active."
+            : "GENERAL_HIGH_RISK requires workplace preparation measures and an active referenced work site.",
+      }),
+      check({
+        code: "SAFETY_MEASURES_PRESENT",
+        label: "Safety measures",
+        passed: Boolean(String(entry.safetyMeasures ?? "").trim()),
+        severity: "BLOCKER",
+        subjectType: "WORKPLACE",
+        subjectId: permit.workSiteId,
+        sourceType: "PERMIT_PAYLOAD",
+        sourceStatus: Boolean(String(entry.safetyMeasures ?? "").trim())
+          ? "PRESENT"
+          : "MISSING",
+        message: Boolean(String(entry.safetyMeasures ?? "").trim())
+          ? "Safety measures are present."
+          : "Safety measures are mandatory.",
+      }),
+      check({
+        code: "LEGAL_BASIS_PRESENT",
+        label: "Legal basis",
+        passed:
+          stringArray(entry.legalBasis).length > 0 &&
+          Boolean(entry.legalBasisVersion) &&
+          Boolean(entry.legalBasisEffectiveDate),
+        severity: "BLOCKER",
+        subjectType: "DOCUMENT",
+        sourceType: "PERMIT_PAYLOAD",
+        sourceStatus: "SYSTEM_SET",
+        message:
+          stringArray(entry.legalBasis).length > 0 &&
+          Boolean(entry.legalBasisVersion) &&
+          Boolean(entry.legalBasisEffectiveDate)
+            ? "Legal basis and system-controlled version metadata are present."
+            : "Legal basis, version, and effective date are required.",
+      }),
+    ];
+    const result = checks.every(
+      (check) => check.result === "PASS" || check.severity === "WARNING",
+    )
       ? ("PASS" as const)
       : ("FAIL" as const);
     const snapshot = (
@@ -1919,23 +2203,33 @@ export class WorkPermitsService {
       evidence,
     });
     const snapshots = {
-      trainingCheckSnapshot: snapshot(trainingEvidence, "TRAINING"),
-      briefingCheckSnapshot: snapshot(briefingEvidence, "BRIEFING"),
-      certificateCheckSnapshot: snapshot(certificateEvidence, "CERTIFICATES"),
+      trainingCheckSnapshot: snapshot(
+        trainingEvidence,
+        "TRAINING_EVIDENCE_VALID",
+      ),
+      briefingCheckSnapshot: snapshot(
+        briefingEvidence,
+        "BRIEFING_EVIDENCE_VALID",
+      ),
+      certificateCheckSnapshot: snapshot(
+        certificateEvidence,
+        "QUALIFICATION_OR_CERTIFICATE_VALID",
+      ),
       medicalCheckSnapshot: {
-        ...snapshot(medicalEvidence, "MEDICAL_CLEARANCE"),
+        ...snapshot(medicalEvidence, "MEDICAL_CLEARANCE_VALID"),
         containsDiagnosis: false as const,
       },
-      ppeIssuedSnapshot: snapshot(ppeEvidence, "PPE_ISSUED"),
+      ppeIssuedSnapshot: snapshot(ppeEvidence, "PPE_ISSUED_VALID"),
       requiredDocumentSnapshot: snapshot(
         requiredEvidence,
-        "REQUIRED_DOCUMENTS",
+        "REQUIRED_DOCUMENTS_PRESENT",
       ),
       contractorAccessActSnapshot: {
         checkedAt: checkedAt.toISOString(),
         result:
-          checks.find((check) => check.code === "CONTRACTOR_ACCESS_ACT")
-            ?.result ?? ("FAIL" as const),
+          checks.find(
+            (check) => check.code === "CONTRACTOR_ACCESS_ACT_DATE_COVERAGE",
+          )?.result ?? ("FAIL" as const),
         evidence: contractorAccessAct
           ? [
               this.snapshotEvidence("CONTRACTOR_ACCESS_ACT", {
@@ -1949,6 +2243,13 @@ export class WorkPermitsService {
           : [],
       },
     };
+    const payloadHash = this.precheckPayloadHash(entry);
+    const blockerCount = checks.filter(
+      (check) => check.result === "FAIL" && check.severity === "BLOCKER",
+    ).length;
+    const warningCount = checks.filter(
+      (check) => check.result === "FAIL" && check.severity === "WARNING",
+    ).length;
     const nextEntry = {
       ...entry,
       status: result === "PASS" ? "draft" : "missing_documents",
@@ -1958,6 +2259,9 @@ export class WorkPermitsService {
         failedRules: checks
           .filter((check) => check.result === "FAIL")
           .map((check) => check.code),
+        blockerCount,
+        warningCount,
+        payloadHash,
       },
       precheckChecks: checks,
       ...snapshots,
@@ -1966,7 +2270,7 @@ export class WorkPermitsService {
       updatedAt: checkedAt.toISOString(),
     };
     const payload = this.payloadWithEntry(permit, nextEntry);
-    const snapshotHash = canonicalHash({ checks, snapshots });
+    const snapshotHash = canonicalHash({ checks, snapshots, payloadHash });
 
     await this.prisma.$transaction(async (transaction) => {
       const version = await this.appendVersion(
@@ -2154,12 +2458,7 @@ export class WorkPermitsService {
     const permit = await this.findPermit(id);
     await this.assertAccess(user, permit, "submit");
     assertWorkPermitTransition(permit.status, "IN_APPROVAL");
-    const summary = objectValue(this.payloadEntry(permit).precheckSummary);
-    if (summary.result !== "PASS") {
-      throw new BadRequestException(
-        "A successful precheck is required before submit.",
-      );
-    }
+    this.assertCurrentPrecheck(permit);
     if (
       !permit.workProducerEmployeeId ||
       !permit.responsibleManagerEmployeeId ||
@@ -2365,6 +2664,8 @@ export class WorkPermitsService {
     id: string,
     input: PermitWorkflowInput,
   ) {
+    const permit = await this.findPermit(id);
+    this.assertCurrentPrecheck(permit);
     await this.transition(user, id, "activate", "ACTIVE", input);
     await this.prisma.workPermit.update({
       where: { id },
@@ -2438,9 +2739,642 @@ export class WorkPermitsService {
     return this.transition(user, id, "cancel", "CANCELLED", input);
   }
 
+  private artifactDate(value: unknown) {
+    if (value instanceof Date) return value;
+    if (typeof value !== "string" || !value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private artifactChecks(value: unknown) {
+    if (!Array.isArray(value)) return [];
+    return value.map((item) => {
+      const check = objectValue(item);
+      return {
+        code: String(check.code ?? "UNKNOWN"),
+        label: String(check.label ?? check.code ?? "Unknown check"),
+        result: check.result === "PASS" ? "PASS" : "FAIL",
+        severity: check.severity === "WARNING" ? "WARNING" : "BLOCKER",
+        message: String(check.message ?? ""),
+        evidenceIds: stringArray(check.evidenceIds),
+      };
+    });
+  }
+
+  private async buildPermitArtifact(
+    user: AuthenticatedUser,
+    permit: PermitWithDetails,
+    generatedAt = new Date(),
+  ) {
+    const entry = this.payloadEntry(permit);
+    const crew = Array.isArray(entry.crew)
+      ? entry.crew.map(objectValue)
+      : permit.brigades.flatMap((brigade) =>
+          brigade.members.map((member) => ({
+            employeeId: member.employeeId,
+            contractorWorkerId: member.contractorWorkerId,
+            roleCode: member.roleCode,
+          })),
+        );
+    const acknowledgements = Array.isArray(
+      entry.crewInstructionAcknowledgements,
+    )
+      ? entry.crewInstructionAcknowledgements.map(objectValue)
+      : [];
+    const employeeIds = [
+      permit.issuerEmployeeId,
+      permit.responsibleManagerEmployeeId,
+      permit.workProducerEmployeeId,
+      permit.admitterEmployeeId,
+      permit.observerEmployeeId,
+      typeof entry.targetBriefingInstructorId === "string"
+        ? entry.targetBriefingInstructorId
+        : null,
+      typeof entry.admittedById === "string" ? entry.admittedById : null,
+      ...crew.map((member) =>
+        typeof member.employeeId === "string" ? member.employeeId : null,
+      ),
+    ].filter((id): id is string => Boolean(id));
+    const workerIds = [
+      permit.contractorRepresentativeId,
+      ...crew.map((member) =>
+        typeof member.contractorWorkerId === "string"
+          ? member.contractorWorkerId
+          : null,
+      ),
+    ].filter((id): id is string => Boolean(id));
+    const closedByUserId = permit.closure?.closedByUserId ?? null;
+    const [organization, employees, workers, contractor, closedByUser] =
+      await Promise.all([
+        this.prisma.organization.findUnique({
+          where: { id: permit.organizationId },
+          select: { id: true, name: true },
+        }),
+        employeeIds.length
+          ? this.prisma.employee.findMany({
+              where: {
+                companyId: permit.organizationId,
+                id: { in: [...new Set(employeeIds)] },
+              },
+              select: {
+                id: true,
+                fullName: true,
+                employeeNumber: true,
+                jobTitle: true,
+              },
+            })
+          : [],
+        workerIds.length
+          ? this.prisma.contractorWorker.findMany({
+              where: {
+                organizationId: permit.organizationId,
+                id: { in: [...new Set(workerIds)] },
+              },
+              select: {
+                id: true,
+                fullName: true,
+                workerNumber: true,
+                positionTitle: true,
+              },
+            })
+          : [],
+        permit.contractorOrganizationId
+          ? this.prisma.contractorOrganization.findFirst({
+              where: {
+                id: permit.contractorOrganizationId,
+                organizationId: permit.organizationId,
+              },
+              select: { id: true, name: true },
+            })
+          : null,
+        closedByUserId
+          ? this.prisma.user.findUnique({
+              where: { id: closedByUserId },
+              select: { id: true, fullName: true },
+            })
+          : null,
+      ]);
+    if (!organization) {
+      throw new NotFoundException("Permit organization not found.");
+    }
+    const employeeById = new Map(
+      employees.map((employee) => [employee.id, employee]),
+    );
+    const workerById = new Map(workers.map((worker) => [worker.id, worker]));
+    const employeeName = (id: string | null | undefined) =>
+      id ? (employeeById.get(id)?.fullName ?? id) : null;
+    const workerName = (id: string | null | undefined) =>
+      id ? (workerById.get(id)?.fullName ?? id) : null;
+    const acknowledgementStatus = (
+      employeeId: string | null,
+      contractorWorkerId: string | null,
+    ) => {
+      const acknowledgement = acknowledgements.find(
+        (item) =>
+          (employeeId && item.employeeId === employeeId) ||
+          (contractorWorkerId &&
+            item.contractorWorkerId === contractorWorkerId),
+      );
+      return acknowledgement
+        ? String(acknowledgement.status ?? "pending")
+        : null;
+    };
+    const precheckRun = permit.precheckRuns[0] ?? null;
+    const checks = this.artifactChecks(
+      precheckRun?.checksJson ?? entry.precheckChecks,
+    );
+    const precheckSummary = objectValue(entry.precheckSummary);
+    const blockerCount = checks.filter(
+      (check) => check.result === "FAIL" && check.severity === "BLOCKER",
+    ).length;
+    const warningCount = checks.filter(
+      (check) => check.result === "FAIL" && check.severity === "WARNING",
+    ).length;
+    const pdf = {
+      permitCode: permit.permitCode,
+      journalRegistrationNumber: permit.journalRegistrationNumber,
+      permitType: permit.permitType,
+      workType: permit.workType,
+      status: permit.status,
+      draft: permit.status === "DRAFT",
+      organizationName: organization.name,
+      branchName: permit.branch?.name ?? null,
+      workSiteName: permit.workSite
+        ? [permit.workSite.name, permit.workSite.location]
+            .filter(Boolean)
+            .join(" / ")
+        : null,
+      workDescription: String(entry.workDescription ?? permit.workDescription),
+      workplace: String(entry.workplace ?? permit.workplace),
+      equipmentOrObject:
+        typeof entry.equipmentOrObject === "string"
+          ? entry.equipmentOrObject
+          : null,
+      issuedAt: permit.issuedAt ?? permit.createdAt,
+      effectiveFrom: this.artifactDate(entry.startAt) ?? permit.effectiveFrom,
+      effectiveTo: this.artifactDate(entry.endAt) ?? permit.effectiveTo,
+      legalBasis: stringArray(entry.legalBasis),
+      legalBasisVersion:
+        typeof entry.legalBasisVersion === "string"
+          ? entry.legalBasisVersion
+          : null,
+      legalBasisEffectiveDate:
+        typeof entry.legalBasisEffectiveDate === "string"
+          ? entry.legalBasisEffectiveDate
+          : null,
+      responsiblePeople: [
+        {
+          role: "Выдающий наряд",
+          name: employeeName(permit.issuerEmployeeId),
+        },
+        {
+          role: "Ответственный руководитель",
+          name: employeeName(permit.responsibleManagerEmployeeId),
+        },
+        {
+          role: "Производитель работ",
+          name: employeeName(permit.workProducerEmployeeId),
+        },
+        {
+          role: "Допускающий",
+          name: employeeName(permit.admitterEmployeeId),
+        },
+        {
+          role: "Наблюдающий",
+          name: employeeName(permit.observerEmployeeId),
+        },
+      ].filter((person): person is { role: string; name: string } =>
+        Boolean(person.name),
+      ),
+      contractor:
+        contractor || permit.contractorAccessAct
+          ? {
+              name:
+                contractor?.name ??
+                permit.contractorAccessAct?.contractorOrganization.name ??
+                String(permit.contractorOrganizationId),
+              representative:
+                workerName(permit.contractorRepresentativeId) ??
+                permit.contractorAccessAct?.contractorRepresentative
+                  ?.fullName ??
+                null,
+              accessActNumber: permit.contractorAccessAct?.actNumber ?? null,
+              accessActValidFrom: permit.contractorAccessAct?.validFrom ?? null,
+              accessActValidTo: permit.contractorAccessAct?.validTo ?? null,
+              workArea: permit.contractorAccessAct?.workArea ?? null,
+            }
+          : null,
+      crew: crew.map((member) => {
+        const employeeId =
+          typeof member.employeeId === "string" ? member.employeeId : null;
+        const contractorWorkerId =
+          typeof member.contractorWorkerId === "string"
+            ? member.contractorWorkerId
+            : null;
+        return {
+          name:
+            employeeName(employeeId) ??
+            workerName(contractorWorkerId) ??
+            "Не указано",
+          role: String(member.roleCode ?? "EXECUTOR"),
+          subjectType: employeeId ? "INTERNAL_EMPLOYEE" : "CONTRACTOR_WORKER",
+          acknowledgementStatus: acknowledgementStatus(
+            employeeId,
+            contractorWorkerId,
+          ),
+        };
+      }),
+      hazardFactors: stringArray(entry.hazardFactors),
+      safetyMeasures: String(entry.safetyMeasures ?? ""),
+      workplacePreparationMeasures:
+        typeof entry.workplacePreparationMeasures === "string"
+          ? entry.workplacePreparationMeasures
+          : null,
+      ppeRequirements:
+        typeof entry.ppeRequirements === "string"
+          ? entry.ppeRequirements
+          : null,
+      isolationLockoutMeasures:
+        typeof entry.isolationLockoutMeasures === "string"
+          ? entry.isolationLockoutMeasures
+          : null,
+      fencingAndSignsMeasures:
+        typeof entry.fencingAndSignsMeasures === "string"
+          ? entry.fencingAndSignsMeasures
+          : null,
+      fireSafetyMeasures:
+        typeof entry.fireSafetyMeasures === "string"
+          ? entry.fireSafetyMeasures
+          : null,
+      airAnalysis:
+        entry.airAnalysisRequired === true
+          ? [
+              String(entry.airAnalysisResult ?? "Результат не указан"),
+              typeof entry.airAnalysisAt === "string"
+                ? entry.airAnalysisAt
+                : null,
+              typeof entry.airAnalysisBy === "string"
+                ? `исполнитель: ${entry.airAnalysisBy}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" / ")
+          : "Не требуется",
+      targetBriefing: {
+        text:
+          typeof entry.targetBriefingText === "string"
+            ? entry.targetBriefingText
+            : null,
+        at: this.artifactDate(entry.targetBriefingAt),
+        instructor: employeeName(
+          typeof entry.targetBriefingInstructorId === "string"
+            ? entry.targetBriefingInstructorId
+            : null,
+        ),
+        acknowledgements: acknowledgements.length
+          ? `${acknowledgements.filter((item) => item.status === "acknowledged").length}/${acknowledgements.length} acknowledged`
+          : "Не указано",
+      },
+      precheck:
+        precheckRun || Object.keys(precheckSummary).length
+          ? {
+              result: String(
+                precheckRun?.result ?? precheckSummary.result ?? "FAIL",
+              ),
+              checkedAt:
+                precheckRun?.checkedAt ??
+                this.artifactDate(precheckSummary.checkedAt),
+              blockerCount:
+                typeof precheckSummary.blockerCount === "number"
+                  ? precheckSummary.blockerCount
+                  : blockerCount,
+              warningCount:
+                typeof precheckSummary.warningCount === "number"
+                  ? precheckSummary.warningCount
+                  : warningCount,
+              checks: checks.map((check) => ({
+                code: check.code,
+                result: check.result,
+                severity: check.severity,
+              })),
+            }
+          : null,
+      admission: {
+        admissionAt: this.artifactDate(entry.admissionAt) ?? permit.startedAt,
+        admittedBy: employeeName(
+          typeof entry.admittedById === "string"
+            ? entry.admittedById
+            : permit.admitterEmployeeId,
+        ),
+        acceptedByWorkProducerAt: this.artifactDate(
+          entry.acceptedByWorkProducerAt,
+        ),
+      },
+      closure: permit.closure
+        ? {
+            closedAt: permit.closure.closedAt,
+            result: permit.closure.result,
+            inspection: permit.closure.inspection,
+            closedBy: closedByUser?.fullName ?? null,
+            notes: permit.closure.notes,
+          }
+        : null,
+      payloadHash: permit.currentVersion?.payloadHash ?? null,
+      signedPayloadHash: permit.signedPayloadHash,
+      documentVersionHash:
+        permit.currentVersion?.documentVersion?.renderedHash ??
+        permit.currentVersion?.payloadHash ??
+        null,
+      documentVersionId: permit.currentVersion?.documentVersionId ?? null,
+      signatures:
+        permit.documentEnvelope?.signatures.map((signature) => ({
+          signerName: signature.signerName,
+          signerRole: signature.signerRole,
+          provider: signature.provider,
+          status: signature.status,
+          certificateSerial: signature.certificateSerial,
+          signedAt: signature.signedAt,
+          verification: signature.verification?.result ?? null,
+        })) ?? [],
+      generatedAt,
+      generatedBy: user.fullName ?? user.email,
+    };
+    return {
+      entry,
+      pdf,
+      canonicalPayloadHash: canonicalHash(
+        permit.currentVersion?.payloadJson ?? {},
+      ),
+    };
+  }
+
+  private isFinalPermitArtifact(status: string) {
+    return [
+      "SIGNED",
+      "ACTIVE",
+      "SUSPENDED",
+      "EXTENDED",
+      "CLOSED",
+      "EXPIRED",
+      "CANCELLED",
+      "ARCHIVED",
+    ].includes(status);
+  }
+
+  private async renderAndSnapshotPermitPdf(
+    user: AuthenticatedUser,
+    permit: PermitWithDetails,
+  ) {
+    const artifact = await this.buildPermitArtifact(user, permit);
+    const buffer = await this.pdfService.renderWorkPermit(artifact.pdf);
+    const pdfHash = sha256(buffer);
+    let snapshot = null;
+    if (
+      this.isFinalPermitArtifact(permit.status) &&
+      permit.documentEnvelopeId &&
+      permit.currentVersion?.documentVersionId
+    ) {
+      snapshot = await this.corePlatformService.createExportSnapshot(user, {
+        organizationId: permit.organizationId,
+        envelopeId: permit.documentEnvelopeId,
+        versionId: permit.currentVersion.documentVersionId,
+        format: "PDF_A_1",
+        storageUri: `generated://work-permits/${permit.id}/pdf/${pdfHash}`,
+        sha256: pdfHash,
+        manifestJson: {
+          subjectType: "WORK_PERMIT",
+          subjectId: permit.id,
+          permitNumber: permit.permitCode,
+          journalRegistrationNumber: permit.journalRegistrationNumber,
+          payloadHash: permit.currentVersion.payloadHash,
+          signedPayloadHash: permit.signedPayloadHash,
+          canonicalPayloadHash: artifact.canonicalPayloadHash,
+          generatedAt: artifact.pdf.generatedAt.toISOString(),
+          generatedByUserId: user.userId,
+        },
+      });
+    }
+    await this.auditService.log({
+      actorUserId: user.userId,
+      companyId: permit.organizationId,
+      action: "work_permit.pdf_generated",
+      entityType: "WorkPermit",
+      entityId: permit.id,
+      metadata: {
+        pdfHash,
+        exportSnapshotId: snapshot?.id ?? null,
+        versionId: permit.currentVersion?.documentVersionId ?? null,
+        draft: permit.status === "DRAFT",
+      },
+    });
+    return { buffer, pdfHash, snapshot, artifact };
+  }
+
+  private async buildPermitEvidenceManifest(
+    user: AuthenticatedUser,
+    permit: PermitWithDetails,
+  ) {
+    if (!permit.documentEnvelopeId) {
+      throw new NotFoundException("Permit evidence package is unavailable.");
+    }
+    const [genericEvidence, auditEvents, attachments] = await Promise.all([
+      this.corePlatformService.buildEvidencePackage(
+        user,
+        permit.documentEnvelopeId,
+      ),
+      this.prisma.auditLog.findMany({
+        where: {
+          companyId: permit.organizationId,
+          entityType: "WorkPermit",
+          entityId: permit.id,
+        },
+        select: {
+          id: true,
+          action: true,
+          actorUserId: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+      this.prisma.attachment.findMany({
+        where: {
+          organizationId: permit.organizationId,
+          OR: [
+            { ownerType: "WORK_PERMIT", ownerId: permit.id },
+            ...(permit.currentVersion
+              ? [
+                  {
+                    ownerType: "WORK_PERMIT_VERSION" as const,
+                    ownerId: permit.currentVersion.id,
+                  },
+                ]
+              : []),
+          ],
+        },
+        select: {
+          id: true,
+          fileName: true,
+          mimeType: true,
+          sizeBytes: true,
+          sha256: true,
+          ownerType: true,
+          ownerId: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
+    const artifact = await this.buildPermitArtifact(user, permit);
+    const latestPrecheck = permit.precheckRuns[0] ?? null;
+    const checks = this.artifactChecks(latestPrecheck?.checksJson);
+    const latestPdf = genericEvidence.exportSnapshots
+      .filter((snapshot) => snapshot.format === "PDF_A_1")
+      .at(-1);
+    const manifest = {
+      permit: {
+        id: permit.id,
+        organizationId: permit.organizationId,
+        permitNumber: permit.permitCode,
+        journalRegistrationNumber: permit.journalRegistrationNumber,
+        status: permit.status,
+        legalBasis: artifact.pdf.legalBasis,
+        legalBasisVersion: artifact.pdf.legalBasisVersion,
+        legalBasisEffectiveDate: artifact.pdf.legalBasisEffectiveDate,
+      },
+      document: {
+        currentVersionId: permit.currentVersionId,
+        documentEnvelopeId: permit.documentEnvelopeId,
+        documentVersionId: permit.currentVersion?.documentVersionId ?? null,
+      },
+      hashes: {
+        payloadHash: permit.currentVersion?.payloadHash ?? null,
+        signedPayloadHash: permit.signedPayloadHash,
+        canonicalPayloadHash: artifact.canonicalPayloadHash,
+        generatedPdfHash: latestPdf?.sha256 ?? null,
+      },
+      signatures: genericEvidence.signatures.map((signature) => ({
+        id: signature.id,
+        provider: signature.provider,
+        status: signature.status,
+        createdAt: signature.createdAt,
+        signedAt: signature.signedAt,
+        signer: {
+          id: signature.signerUserId ?? signature.signerEmployeeId,
+          role: signature.signerRole,
+          name: signature.signerName,
+        },
+        certificate: signature.certificateMetadata
+          ? {
+              id: signature.certificateMetadata.id,
+              serial: signature.certificateMetadata.serial,
+              thumbprint: signature.certificateMetadata.thumbprint,
+              validFrom: signature.certificateMetadata.validFrom,
+              validTo: signature.certificateMetadata.validTo,
+            }
+          : {
+              id: signature.certificateMetadataId,
+              serial: signature.certificateSerial,
+              thumbprint: null,
+              validFrom: null,
+              validTo: null,
+            },
+        verification: signature.verification
+          ? {
+              result: signature.verification.result,
+              checkedAt: signature.verification.checkedAt,
+              chainStatus: signature.verification.chainStatus,
+              revocationStatus: signature.verification.revocationStatus,
+            }
+          : null,
+      })),
+      precheck: latestPrecheck
+        ? {
+            latestRunId: latestPrecheck.id,
+            result: latestPrecheck.result,
+            checkedAt: latestPrecheck.checkedAt,
+            snapshotHash: latestPrecheck.snapshotHash,
+            versionId: latestPrecheck.versionId,
+            blockerCount: checks.filter(
+              (check) =>
+                check.result === "FAIL" && check.severity === "BLOCKER",
+            ).length,
+            warningCount: checks.filter(
+              (check) =>
+                check.result === "FAIL" && check.severity === "WARNING",
+            ).length,
+            rules: checks.map((check) => ({
+              code: check.code,
+              result: check.result,
+              severity: check.severity,
+              message: check.message,
+              evidenceIds: check.evidenceIds,
+            })),
+          }
+        : null,
+      contractorAccessAct: permit.contractorAccessAct
+        ? {
+            id: permit.contractorAccessAct.id,
+            actNumber: permit.contractorAccessAct.actNumber,
+            status: permit.contractorAccessAct.status,
+            validFrom: permit.contractorAccessAct.validFrom,
+            validTo: permit.contractorAccessAct.validTo,
+            contractor: {
+              id: permit.contractorAccessAct.contractorOrganization.id,
+              name: permit.contractorAccessAct.contractorOrganization.name,
+            },
+            workArea: permit.contractorAccessAct.workArea,
+          }
+        : null,
+      closure: permit.closure
+        ? {
+            result: permit.closure.result,
+            inspection: permit.closure.inspection,
+            closedAt: permit.closure.closedAt,
+            payloadHash: permit.closure.payloadHash,
+          }
+        : null,
+      archive: permit.archiveRecord
+        ? {
+            id: permit.archiveRecord.id,
+            status: permit.archiveRecord.status,
+            archiveManifestHash: permit.archiveRecord.archiveManifestHash,
+            archivedAt: permit.archiveRecord.archivedAt,
+            retentionPolicyId: permit.archiveRecord.retentionPolicyId,
+            retentionCode: permit.archiveRecord.retentionPolicy.retentionCode,
+          }
+        : null,
+      exportSnapshots: genericEvidence.exportSnapshots.map((snapshot) => ({
+        id: snapshot.id,
+        format: snapshot.format,
+        sha256: snapshot.sha256,
+        storageUri: snapshot.storageUri,
+        versionId: snapshot.versionId,
+        generatedAt: snapshot.generatedAt,
+      })),
+      auditEvents,
+      attachments,
+      medicalPrivacy: {
+        containsDiagnosis: false,
+        includedFields:
+          "clearance status, validity dates, evidence identifiers only",
+      },
+      generatedAt: new Date(),
+      generatedByUserId: user.userId,
+    };
+    return {
+      ...manifest,
+      manifestHash: canonicalHash(manifest),
+    };
+  }
+
   async archive(user: AuthenticatedUser, id: string) {
     const permit = await this.findPermit(id);
     await this.assertAccess(user, permit, "archive");
+    if (!["CLOSED", "EXPIRED", "CANCELLED"].includes(permit.status)) {
+      throw new ConflictException(
+        "Only closed, expired, or cancelled work permits can be archived.",
+      );
+    }
     assertWorkPermitTransition(permit.status, "ARCHIVED");
     if (
       !permit.documentEnvelopeId ||
@@ -2460,6 +3394,11 @@ export class WorkPermitsService {
     if (!resolved) {
       throw new BadRequestException("Retention policy could not be resolved.");
     }
+    await this.renderAndSnapshotPermitPdf(user, permit);
+    const evidenceManifest = await this.buildPermitEvidenceManifest(
+      user,
+      permit,
+    );
     const now = new Date();
     const archiveRecord = await this.corePlatformService.createArchiveRecord(
       user,
@@ -2471,9 +3410,8 @@ export class WorkPermitsService {
         status: "ARCHIVED",
         sealedAt: effectiveAt.toISOString(),
         archivedAt: now.toISOString(),
-        archiveManifestHash:
-          permit.signedPayloadHash ?? permit.currentVersion.payloadHash,
-        storageUri: null,
+        archiveManifestHash: evidenceManifest.manifestHash,
+        storageUri: `generated://work-permits/${permit.id}/archive/${evidenceManifest.manifestHash}`,
       },
     );
     await this.prisma.$transaction(async (transaction) => {
@@ -2492,50 +3430,88 @@ export class WorkPermitsService {
         },
       });
     });
+    await this.auditService.log({
+      actorUserId: user.userId,
+      companyId: permit.organizationId,
+      action: "work_permit.archived",
+      entityType: "WorkPermit",
+      entityId: permit.id,
+      metadata: {
+        archiveRecordId: archiveRecord.id,
+        archiveManifestHash: evidenceManifest.manifestHash,
+        pdfHash: evidenceManifest.hashes.generatedPdfHash,
+      },
+    });
     return this.get(user, id);
   }
 
   async evidence(user: AuthenticatedUser, id: string) {
     const permit = await this.findPermit(id);
     await this.assertAccess(user, permit);
-    if (!permit.documentEnvelopeId) {
-      throw new NotFoundException("Permit evidence package is unavailable.");
-    }
-    return this.corePlatformService.buildEvidencePackage(
-      user,
-      permit.documentEnvelopeId,
-    );
+    const manifest = await this.buildPermitEvidenceManifest(user, permit);
+    await this.auditService.log({
+      actorUserId: user.userId,
+      companyId: permit.organizationId,
+      action: "work_permit.evidence_generated",
+      entityType: "WorkPermit",
+      entityId: permit.id,
+      metadata: {
+        manifestHash: manifest.manifestHash,
+        versionId: permit.currentVersion?.documentVersionId ?? null,
+      },
+    });
+    return manifest;
   }
 
   async download(user: AuthenticatedUser, id: string) {
-    const permit = await this.get(user, id);
-    return this.pdfService.renderWorkPermit({
-      permitCode: permit.permitCode,
-      journalRegistrationNumber: permit.journalRegistrationNumber,
-      permitType: permit.permitType,
-      workType: permit.workType,
-      status: permit.status,
-      workDescription: permit.workDescription,
-      workplace: permit.workplace,
-      effectiveFrom: permit.effectiveFrom,
-      effectiveTo: permit.effectiveTo,
-      closedAt: permit.closedAt,
-      payloadHash: permit.currentVersion?.payloadHash ?? null,
-      signedPayloadHash: permit.signedPayloadHash,
-      approvals: permit.approvals.map((approval) => ({
-        stepNo: approval.stepNo,
-        role: approval.role,
-        status: approval.status,
-        decidedAt: approval.decidedAt,
-      })),
-      signatures:
-        permit.documentEnvelope?.signatures.map((signature) => ({
-          signerName: signature.signerName,
-          certificateSerial: signature.certificateSerial,
-          signedAt: signature.signedAt,
-          verification: signature.verification?.result ?? null,
-        })) ?? [],
+    const permit = await this.findPermit(id);
+    await this.assertAccess(user, permit);
+    const rendered = await this.renderAndSnapshotPermitPdf(user, permit);
+    return rendered.buffer;
+  }
+
+  async downloadJournal(user: AuthenticatedUser, filters: PermitListFilter) {
+    const organizationId = requireOrganizationScope(
+      user,
+      filters.organizationId ?? null,
+    );
+    const page = await this.list(user, {
+      ...filters,
+      organizationId,
+      page: 1,
+      pageSize: 100,
     });
+    const generatedAt = new Date();
+    const buffer = await this.pdfService.renderWorkPermitJournal({
+      generatedAt,
+      records: page.items.map((permit) => ({
+        journalRegistrationNumber: permit.journal.journalRegistrationNumber,
+        permitNumber: permit.journal.permitNumber,
+        issuedAt: permit.issuedAt,
+        initialAdmissionAt: this.artifactDate(
+          permit.journal.initialAdmissionAt,
+        ),
+        issuer: permit.journal.issuer?.displayName ?? null,
+        workDescription: permit.journal.workDescription,
+        workplace: permit.journal.workplace,
+        status: permit.status,
+        validUntil: this.artifactDate(permit.journal.validUntil),
+        closedAt: this.artifactDate(permit.journal.closedAt),
+      })),
+    });
+    await this.auditService.log({
+      actorUserId: user.userId,
+      companyId: organizationId,
+      action: "work_permit.journal_pdf_generated",
+      entityType: "WorkPermitJournal",
+      entityId: organizationId,
+      metadata: {
+        sha256: sha256(buffer),
+        recordCount: page.items.length,
+        generatedAt: generatedAt.toISOString(),
+      },
+    });
+    return buffer;
   }
 
   async listPpe(user: AuthenticatedUser, organizationId?: string) {

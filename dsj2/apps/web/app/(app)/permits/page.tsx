@@ -44,6 +44,7 @@ function displayText(value: string | null | undefined) {
 }
 
 function exportHref(
+  format: "csv" | "pdf",
   companyId: string | null,
   params: Record<string, string | string[] | undefined>,
 ) {
@@ -56,7 +57,7 @@ function exportHref(
   }
   exportParams.set("pageSize", "100");
   const query = exportParams.toString();
-  return `/api/permits/journal.csv${query ? `?${query}` : ""}`;
+  return `/api/permits/journal.${format}${query ? `?${query}` : ""}`;
 }
 
 export default async function PermitsPage({
@@ -104,7 +105,8 @@ export default async function PermitsPage({
       ])
     : [{ items: [], total: 0, page: 1, pageSize: 25 }, emptyOptions];
   const permits = permitPage.items;
-  const csvHref = exportHref(activeCompanyId, params);
+  const csvHref = exportHref("csv", activeCompanyId, params);
+  const pdfHref = exportHref("pdf", activeCompanyId, params);
 
   return (
     <div className="space-y-6">
@@ -128,9 +130,8 @@ export default async function PermitsPage({
             Журнал нарядов-допусков
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-slate-500">
-            Учет выдачи нарядов-допусков по Приказу МТСЗН РК №344:
-            регистрация, первичный допуск, статус, срок действия, закрытие и
-            архив.
+            Учет выдачи нарядов-допусков по Приказу МТСЗН РК №344: регистрация,
+            первичный допуск, статус, срок действия, закрытие и архив.
           </p>
         </div>
         <div className="flex flex-col gap-3">
@@ -148,6 +149,15 @@ export default async function PermitsPage({
               >
                 <Download className="h-4 w-4" />
                 CSV
+              </Link>
+            ) : null}
+            {activeCompanyId ? (
+              <Link
+                href={pdfHref}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <Download className="h-4 w-4" />
+                Appendix 2 PDF
               </Link>
             ) : null}
             {!isReadOnly ? (
@@ -355,9 +365,32 @@ export default async function PermitsPage({
             </TableWrapper>
           ) : (
             <EmptyState className="min-h-32 justify-center text-left">
-              {activeCompanyId
-                ? "Записи журнала не найдены по выбранным фильтрам."
-                : "Сначала выберите компанию."}
+              {activeCompanyId ? (
+                <div className="space-y-2">
+                  <p>No permit journal rows match the current filters.</p>
+                  {!isReadOnly ? (
+                    <p>
+                      Start with an{" "}
+                      <Link
+                        href={`/permits/contractor-access-acts?companyId=${activeCompanyId}`}
+                        className="font-medium underline"
+                      >
+                        Appendix 3 contractor access act
+                      </Link>{" "}
+                      when contractor access is required, or{" "}
+                      <Link
+                        href={`/permits/new?companyId=${activeCompanyId}`}
+                        className="font-medium underline"
+                      >
+                        create a permit draft
+                      </Link>
+                      .
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                "Select a company to open its permit journal."
+              )}
             </EmptyState>
           )}
           {activeCompanyId && permitPage.total > permitPage.pageSize ? (

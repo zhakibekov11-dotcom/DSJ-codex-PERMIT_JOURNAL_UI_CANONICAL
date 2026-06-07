@@ -99,6 +99,8 @@ function permitInput(formData: FormData) {
       formData,
       "targetBriefingInstructorId",
     ),
+    crewAcknowledgementsComplete:
+      formData.get("crewAcknowledgementsComplete") === "on",
     admissionAt: optionalIsoDate(formData, "admissionAt"),
     admittedById: optionalText(formData, "admittedById"),
     acceptedByWorkProducerAt: optionalIsoDate(
@@ -136,10 +138,7 @@ function contractorAccessActInput(formData: FormData) {
       formData,
       "hostRepresentativeEmployeeId",
     ),
-    hostUnitChiefEmployeeId: optionalText(
-      formData,
-      "hostUnitChiefEmployeeId",
-    ),
+    hostUnitChiefEmployeeId: optionalText(formData, "hostUnitChiefEmployeeId"),
     workName: text(formData, "workName"),
     workDescription: optionalText(formData, "workDescription"),
     workArea: text(formData, "workArea"),
@@ -362,10 +361,13 @@ async function contractorAccessActWorkflowAction(
   const companyId = optionalText(formData, "companyId");
   const actId = text(formData, "actId");
   try {
-    await apiFetch(`core-platform/contractor-access-acts/${actId}/${endpoint}`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
+    await apiFetch(
+      `core-platform/contractor-access-acts/${actId}/${endpoint}`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
   } catch (error) {
     redirect(
       contractorAccessActsUrl(companyId, {

@@ -120,17 +120,29 @@ export type PermitRecord = {
       archivedAt: string | null;
       disposalEligibleAt: string | null;
     }>;
+    exportSnapshots: Array<{
+      id: string;
+      format: string;
+      sha256: string;
+      generatedAt: string;
+    }>;
   } | null;
   branch?: { id: string; name: string; code?: string | null } | null;
   workSite?: { id: string; name: string; location?: string | null } | null;
-  contractorAccessAct?: (ContractorAccessActSummary & {
-    contractorOrganization?: { id: string; name: string; bin?: string | null };
-    contractorRepresentative?: {
-      id: string;
-      fullName: string;
-      workerNumber?: string | null;
-    } | null;
-  }) | null;
+  contractorAccessAct?:
+    | (ContractorAccessActSummary & {
+        contractorOrganization?: {
+          id: string;
+          name: string;
+          bin?: string | null;
+        };
+        contractorRepresentative?: {
+          id: string;
+          fullName: string;
+          workerNumber?: string | null;
+        } | null;
+      })
+    | null;
 };
 
 export type PermitPage = {
@@ -293,7 +305,9 @@ function asContractorAccessActSummary(
   return {
     id: String(act.id),
     actNumber: String(act.actNumber),
-    status: String(act.status ?? "DRAFT") as ContractorAccessActSummary["status"],
+    status: String(
+      act.status ?? "DRAFT",
+    ) as ContractorAccessActSummary["status"],
     validFrom: String(act.validFrom ?? new Date(0).toISOString()),
     validTo: String(act.validTo ?? new Date(0).toISOString()),
     workArea: String(act.workArea ?? ""),
@@ -387,9 +401,7 @@ export function getPermitEntry(record: {
     isolationLockoutMeasures: asOptionalString(
       rawEntry.isolationLockoutMeasures,
     ),
-    fencingAndSignsMeasures: asOptionalString(
-      rawEntry.fencingAndSignsMeasures,
-    ),
+    fencingAndSignsMeasures: asOptionalString(rawEntry.fencingAndSignsMeasures),
     fireSafetyMeasures: asOptionalString(rawEntry.fireSafetyMeasures),
     communicationOrAdjacentAreaApprovals: asOptionalString(
       rawEntry.communicationOrAdjacentAreaApprovals,
@@ -429,7 +441,40 @@ export function getPermitEntry(record: {
       ? (asObject(rawEntry.precheckSummary) as PermitEntry["precheckSummary"])
       : null,
     precheckChecks: Array.isArray(rawEntry.precheckChecks)
-      ? (rawEntry.precheckChecks as PermitPrecheckCheck[])
+      ? rawEntry.precheckChecks.map((rawCheck) => {
+          const check = asObject(rawCheck);
+          return {
+            code: String(check.code ?? "UNKNOWN"),
+            label: String(check.label ?? check.code ?? "Unknown check"),
+            result: check.result === "PASS" ? "PASS" : "FAIL",
+            severity: check.severity === "WARNING" ? "WARNING" : "BLOCKER",
+            message: String(check.message ?? ""),
+            subjectType:
+              typeof check.subjectType === "string"
+                ? (check.subjectType as PermitPrecheckCheck["subjectType"])
+                : null,
+            subjectId:
+              typeof check.subjectId === "string" ? check.subjectId : null,
+            evidenceIds: Array.isArray(check.evidenceIds)
+              ? asStringArray(check.evidenceIds)
+              : asStringArray(check.evidence),
+            checkedAt:
+              typeof check.checkedAt === "string"
+                ? check.checkedAt
+                : typeof asObject(rawEntry.precheckSummary).checkedAt ===
+                    "string"
+                  ? String(asObject(rawEntry.precheckSummary).checkedAt)
+                  : new Date(0).toISOString(),
+            expiresAt:
+              typeof check.expiresAt === "string" ? check.expiresAt : null,
+            sourceType:
+              typeof check.sourceType === "string" ? check.sourceType : null,
+            sourceStatus:
+              typeof check.sourceStatus === "string"
+                ? check.sourceStatus
+                : null,
+          } satisfies PermitPrecheckCheck;
+        })
       : [],
     trainingCheckSnapshot: rawEntry.trainingCheckSnapshot as
       | PermitSnapshot
